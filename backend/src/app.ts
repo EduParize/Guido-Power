@@ -4,7 +4,9 @@ import { errorHandler } from "./application/middleware/error-handler.middleware"
 
 import usuarioController from "./application/controllers/usuario.controller";
 
+import { createClienteRouter } from "./application/controllers/cliente.controller";
 import { createVeiculoRouter } from "./application/controllers/veiculo.controller";
+import { makeClienteService } from "./configuration/factory/cliente.factory";
 import { makeVeiculoService } from "./configuration/factory/veiculo.factory";
 
 export function createApp(): Express {
@@ -18,6 +20,7 @@ export function createApp(): Express {
   });
 
   app.use("/api/usuarios", usuarioController);
+  app.use("/api/clientes", createClienteRouter(makeClienteService()));
   app.use("/api/veiculos", createVeiculoRouter(makeVeiculoService()));
   
   app.use(errorHandler);

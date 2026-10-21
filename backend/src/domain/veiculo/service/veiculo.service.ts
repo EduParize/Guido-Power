@@ -1,5 +1,5 @@
 import { AppError, NotFoundError, ValidationError } from "../../common/errors/app-error";
-import { UsuarioRepositoryRead } from "../../usuario/repository/usuario.repository.read";
+import { ClienteRepositoryRead } from "../../cliente/repository/cliente.repository.read";
 import { OrdemServicoRepositoryRead } from "../../ordem-servico/repository/ordem-servico.repository.read";
 import { Veiculo, VeiculoInput } from "../entity/veiculo.entity";
 import { VeiculoRepositoryRead } from "../repository/veiculo.repository.read";
@@ -12,7 +12,7 @@ export class VeiculoService {
   constructor(
     private readonly readRepo: VeiculoRepositoryRead,
     private readonly writeRepo: VeiculoRepositoryWrite,
-    private readonly usuarioRepo: UsuarioRepositoryRead,
+    private readonly clienteRepo: ClienteRepositoryRead,
     private readonly ordemRepo: OrdemServicoRepositoryRead,
   ) {}
 
@@ -54,7 +54,7 @@ export class VeiculoService {
   }
 
   private async garantirDonoExiste(donoId: string) {
-    const dono = await this.usuarioRepo.findById(donoId);
+    const dono = await this.clienteRepo.findById(donoId);
     if (!dono) throw new ValidationError("Cliente (dono) não encontrado");
   }
 
