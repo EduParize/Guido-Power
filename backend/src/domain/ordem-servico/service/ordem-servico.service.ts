@@ -200,8 +200,8 @@ export class OrdemServicoService {
     }).format(data);
   }
 
-  private telefoneParaEnvio(telefone: string): string {
-    const digitos = telefone.replace(/\D/g, "");
+  private telefoneParaEnvio(telefone: string | undefined): string {
+    const digitos = typeof telefone === "string" ? telefone.replace(/\D/g, "") : "";
     if (!digitos) throw new ValidationError("Cliente sem telefone válido para WhatsApp");
     return digitos;
   }

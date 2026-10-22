@@ -9,20 +9,21 @@ const CLIENTE = "64a000000000000000000020";
 const INEXISTENTE = "64d000000000000000000099";
 const EVENTO_INEXISTENTE = "64e000000000000000000099";
 
-function setup(telefone = "(54) 99999-9999") {
+// telefone null simula cliente antigo sem telefone gravado
+function setup(telefone: string | null = "(54) 99999-9999") {
   const repo = new FakeOrdemServicoRepository();
   const whatsapp = { enviar: jest.fn().mockResolvedValue(undefined) };
   const service = new OrdemServicoService(
     repo,
     repo,
     { findById: jest.fn().mockResolvedValue({ id: VEICULO, dono: CLIENTE, marca: "Fiat", modelo: "Uno", placa: "ABC1D23" }) } as any,
-    { findById: jest.fn().mockResolvedValue({ id: CLIENTE, nome: "Ana", telefone }) } as any,
+    { findById: jest.fn().mockResolvedValue({ id: CLIENTE, nome: "Ana", telefone: telefone ?? undefined }) } as any,
     whatsapp,
   );
   return { service, repo, whatsapp };
 }
 
-async function comOrdem(telefone?: string) {
+async function comOrdem(telefone?: string | null) {
   const ctx = setup(telefone);
   const ordem = await ctx.service.create(ordemInput(EStatus.EM_ESPERA));
   return { ...ctx, ordem, primeiro: ordem.historico[0] };
@@ -145,6 +146,15 @@ describe("OrdemServicoService - eventos", () => {
     expect(await service.getEvento(ordem.id, evento.id)).toEqual(evento);
     expect((await service.getById(ordem.id)).status).toBe(EStatus.FINALIZADO);
     expect(consoleError).toHaveBeenCalled();
+  });
+
+  it("cliente sem telefone não quebra: não envia e grava o evento", async () => {
+    const { service, ordem, whatsapp } = await comOrdem(null);
+    const evento = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    expect(whatsapp.enviar).not.toHaveBeenCalled();
+    expect(await service.getEvento(ordem.id, evento.id)).toEqual(evento);
+    expect(consoleError.mock.calls[0][1]).toBeInstanceOf(ValidationError);
+    expect(consoleError.mock.calls[0][1].message).toBe("Cliente sem telefone válido para WhatsApp");
   });
 
   it("telefone sem dígitos não envia, mas grava o evento", async () => {

@@ -53,8 +53,19 @@ describe("ZenviaExternalService", () => {
             },
           }],
         }),
+        signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it("timeout ou erro de rede vira 502", async () => {
+    global.fetch = jest.fn().mockRejectedValue(new DOMException("timeout", "TimeoutError")) as unknown as typeof fetch;
+    const service = new ZenviaExternalService(config);
+    await expect(service.enviar({
+      para: "54999999999",
+      template: TemplateWhatsapp.Finalizado,
+      campos: { nomeCliente: "Ana", veiculo: "Fiat Uno ABC1D23", data: "21/10/2026, 18:58", status: "Finalizado" },
+    })).rejects.toMatchObject({ statusCode: 502, message: "Falha ao enviar mensagem no WhatsApp" });
   });
 
   it("resposta que não é 2xx vira 502 sem expor o token", async () => {
