@@ -1,5 +1,7 @@
 interface ApiErrorResponse {
-  error: string
+  error?: string
+  // as validações de /usuarios respondem com { message }
+  message?: string
 }
 
 interface RequestOptions {
@@ -41,8 +43,16 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as ApiErrorResponse | null
-    throw new ApiError(payload?.error ?? response.statusText, response.status)
+    throw new ApiError(
+      payload?.error ?? payload?.message ?? response.statusText,
+      response.status,
+    )
   }
 
   return (await response.json()) as T
+}
+
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) return error.message
+  return 'Não foi possível falar com o servidor'
 }
