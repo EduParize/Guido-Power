@@ -51,6 +51,7 @@ export class ClienteService {
       nome: input.nome.trim(),
       documento: input.documento.trim(),
       email: input.email.trim(),
+      telefone: input.telefone.trim(),
     };
   }
 
