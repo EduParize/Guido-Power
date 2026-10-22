@@ -1,5 +1,6 @@
-import { AppError } from "../../domain/common/errors/app-error";
+import { EResultadoEnvio } from "../../domain/ordem-servico/entity/evento.entity";
 import { TemplateWhatsapp } from "../../domain/ordem-servico/entity/template-whatsapp";
+import { WhatsappTemplateError } from "../../domain/ordem-servico/gateway/whatsapp-template.gateway";
 import { ZenviaExternalService } from "../../infraestructure/external-service/zenvia/zenvia.external-service";
 
 const config = {
@@ -58,17 +59,20 @@ describe("ZenviaExternalService", () => {
     );
   });
 
-  it("timeout ou erro de rede vira 502", async () => {
+  it("timeout ou erro de rede tem resultado incerto", async () => {
     global.fetch = jest.fn().mockRejectedValue(new DOMException("timeout", "TimeoutError")) as unknown as typeof fetch;
     const service = new ZenviaExternalService(config);
     await expect(service.enviar({
       para: "54999999999",
       template: TemplateWhatsapp.Finalizado,
       campos: { nomeCliente: "Ana", veiculo: "Fiat Uno ABC1D23", data: "21/10/2026, 18:58", status: "Finalizado" },
-    })).rejects.toMatchObject({ statusCode: 502, message: "Falha ao enviar mensagem no WhatsApp" });
+    })).rejects.toMatchObject({
+      resultadoEnvio: EResultadoEnvio.INCERTO,
+      message: "Resultado do envio da mensagem no WhatsApp é incerto",
+    });
   });
 
-  it("resposta que não é 2xx vira 502 sem expor o token", async () => {
+  it("resposta que não é 2xx é rejeitada sem expor o token", async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401 }) as unknown as typeof fetch;
     const service = new ZenviaExternalService(config);
     const campos = {
@@ -81,11 +85,14 @@ describe("ZenviaExternalService", () => {
       para: "54999999999",
       template: TemplateWhatsapp.EmServico,
       campos,
-    })).rejects.toEqual(expect.any(AppError));
+    })).rejects.toEqual(expect.any(WhatsappTemplateError));
     await expect(service.enviar({
       para: "54999999999",
       template: TemplateWhatsapp.EmServico,
       campos,
-    })).rejects.toMatchObject({ statusCode: 502, message: "Falha ao enviar mensagem no WhatsApp" });
+    })).rejects.toMatchObject({
+      resultadoEnvio: EResultadoEnvio.REJEITADO,
+      message: "Mensagem rejeitada pela Zenvia",
+    });
   });
 });

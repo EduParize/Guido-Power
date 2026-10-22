@@ -1,8 +1,21 @@
-import { NotFoundError, ValidationError } from "../../domain/common/errors/app-error";
+import {
+  ConflictError,
+  NotificationError,
+  NotFoundError,
+  ValidationError,
+} from "../../domain/common/errors/app-error";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
+import {
+  EResultadoEnvio,
+  EStatusNotificacao,
+} from "../../domain/ordem-servico/entity/evento.entity";
 import { TemplateWhatsapp } from "../../domain/ordem-servico/entity/template-whatsapp";
+import { WhatsappTemplateError } from "../../domain/ordem-servico/gateway/whatsapp-template.gateway";
 import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-servico.service";
-import { FakeOrdemServicoRepository, ordemInput } from "../mocks/ordem-servico.fakes";
+import {
+  FakeOrdemServicoRepository,
+  ordemDominioInput,
+} from "../mocks/ordem-servico.fakes";
 
 const VEICULO = "64a000000000000000000010";
 const CLIENTE = "64a000000000000000000020";
@@ -25,7 +38,7 @@ function setup(telefone: string | null = "(54) 99999-9999") {
 
 async function comOrdem(telefone?: string | null) {
   const ctx = setup(telefone);
-  const ordem = await ctx.service.create(ordemInput(EStatus.EM_ESPERA));
+  const ordem = await ctx.service.create(ordemDominioInput(EStatus.EM_ESPERA));
   return { ...ctx, ordem, primeiro: ordem.historico[0] };
 }
 
@@ -56,7 +69,7 @@ describe("OrdemServicoService - eventos", () => {
 
   it("status inválido e data inválida geram ValidationError", async () => {
     const { service, ordem, primeiro } = await comOrdem();
-    await expect(service.addEvento(ordem.id, { status: "Pausado" as EStatus })).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.addEvento(ordem.id, { status: "Aberto" as EStatus })).rejects.toBeInstanceOf(ValidationError);
     await expect(
       service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO, data: new Date("xx") }),
     ).rejects.toBeInstanceOf(ValidationError);
@@ -102,9 +115,8 @@ describe("OrdemServicoService - eventos", () => {
     await service.removeEvento(ordem.id, diagnostico.id);
     expect(await status()).toBe(EStatus.AGUARDANDO_PECA);
 
-    // histórico vazio mantém o status atual
-    await service.removeEvento(ordem.id, primeiro.id);
-    expect(await service.listEventos(ordem.id)).toEqual([]);
+    await expect(service.removeEvento(ordem.id, primeiro.id)).rejects.toBeInstanceOf(ConflictError);
+    expect(await service.listEventos(ordem.id)).toHaveLength(1);
     expect(await status()).toBe(EStatus.AGUARDANDO_PECA);
   });
 
@@ -113,7 +125,7 @@ describe("OrdemServicoService - eventos", () => {
     const data = new Date("2026-10-20T13:00:00.000Z");
     await service.addEvento(ordem.id, { status: EStatus.AGUARDANDO_PECA, data });
     expect(whatsapp.enviar).toHaveBeenCalledWith({
-      para: "54999999999",
+      para: "5554999999999",
       template: TemplateWhatsapp.AguardandoPeca,
       campos: {
         nomeCliente: "Ana",
@@ -139,29 +151,133 @@ describe("OrdemServicoService - eventos", () => {
     expect(whatsapp.enviar.mock.calls[0][0].template).toBe(TemplateWhatsapp.Finalizado);
   });
 
-  it("falha da Zenvia não desfaz o evento gravado", async () => {
+  it("falha da Zenvia mantém o evento, registra falha e retorna erro", async () => {
     const { service, ordem, whatsapp } = await comOrdem();
     whatsapp.enviar.mockRejectedValueOnce(new Error("Zenvia fora"));
-    const evento = await service.addEvento(ordem.id, { status: EStatus.FINALIZADO });
-    expect(await service.getEvento(ordem.id, evento.id)).toEqual(evento);
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.FINALIZADO }),
+    ).rejects.toMatchObject({
+      details: {
+        eventoId: expect.any(String),
+        resultadoEnvio: EResultadoEnvio.INCERTO,
+      },
+    });
+    const evento = (await service.listEventos(ordem.id))[1];
+    expect(evento.notificacao.status).toBe(EStatusNotificacao.FALHA);
     expect((await service.getById(ordem.id)).status).toBe(EStatus.FINALIZADO);
     expect(consoleError).toHaveBeenCalled();
   });
 
-  it("cliente sem telefone não quebra: não envia e grava o evento", async () => {
+  it("cliente sem telefone registra falha e informa o usuário", async () => {
     const { service, ordem, whatsapp } = await comOrdem(null);
-    const evento = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO }),
+    ).rejects.toBeInstanceOf(NotificationError);
     expect(whatsapp.enviar).not.toHaveBeenCalled();
-    expect(await service.getEvento(ordem.id, evento.id)).toEqual(evento);
-    expect(consoleError.mock.calls[0][1]).toBeInstanceOf(ValidationError);
-    expect(consoleError.mock.calls[0][1].message).toBe("Cliente sem telefone válido para WhatsApp");
+    const evento = (await service.listEventos(ordem.id))[1];
+    expect(evento.notificacao.status).toBe(EStatusNotificacao.FALHA);
+    expect(evento.notificacao.resultadoEnvio).toBe(EResultadoEnvio.REJEITADO);
   });
 
-  it("telefone sem dígitos não envia, mas grava o evento", async () => {
+  it("telefone inválido não envia, mas mantém o evento falho", async () => {
     const { service, ordem, whatsapp } = await comOrdem("---");
-    const evento = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO }),
+    ).rejects.toBeInstanceOf(NotificationError);
     expect(whatsapp.enviar).not.toHaveBeenCalled();
-    expect(await service.getEvento(ordem.id, evento.id)).toEqual(evento);
-    expect(consoleError).toHaveBeenCalled();
+    const evento = (await service.listEventos(ordem.id))[1];
+    expect(evento.notificacao.status).toBe(EStatusNotificacao.FALHA);
+  });
+
+  it("falha rejeitada pela Zenvia registra REJEITADO", async () => {
+    const { service, ordem, whatsapp } = await comOrdem();
+    whatsapp.enviar.mockRejectedValueOnce(
+      new WhatsappTemplateError("Mensagem rejeitada pela Zenvia", EResultadoEnvio.REJEITADO),
+    );
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO }),
+    ).rejects.toMatchObject({
+      details: { resultadoEnvio: EResultadoEnvio.REJEITADO },
+    });
+    const evento = (await service.listEventos(ordem.id))[1];
+    expect(evento.notificacao.status).toBe(EStatusNotificacao.FALHA);
+    expect(evento.notificacao.resultadoEnvio).toBe(EResultadoEnvio.REJEITADO);
+  });
+
+  it("reenvia evento falho sem duplicá-lo", async () => {
+    const { service, ordem, whatsapp } = await comOrdem();
+    whatsapp.enviar.mockRejectedValueOnce(new Error("Zenvia fora"));
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO }),
+    ).rejects.toBeInstanceOf(NotificationError);
+    const falho = (await service.listEventos(ordem.id))[1];
+
+    const reenviado = await service.reenviarNotificacao(ordem.id, falho.id);
+
+    expect(reenviado.notificacao.status).toBe(EStatusNotificacao.ENVIADA);
+    expect(await service.listEventos(ordem.id)).toHaveLength(2);
+    expect(whatsapp.enviar).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejeita status repetido e exige motivo em pausa e cancelamento", async () => {
+    const { service, ordem } = await comOrdem();
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.EM_ESPERA }),
+    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.PAUSADO }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    const pausado = await service.addEvento(ordem.id, {
+      status: EStatus.PAUSADO,
+      motivo: "Aguardando autorização",
+    });
+    expect(pausado.motivo).toBe("Aguardando autorização");
+    expect(pausado.notificacao.status).toBe(EStatusNotificacao.ENVIADA);
+  });
+
+  it("reenvio concorrente concede só um claim", async () => {
+    const { service, ordem, whatsapp } = await comOrdem();
+    whatsapp.enviar.mockRejectedValueOnce(new Error("Zenvia fora"));
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO }),
+    ).rejects.toBeInstanceOf(NotificationError);
+    const falho = (await service.listEventos(ordem.id))[1];
+
+    const resultados = await Promise.allSettled([
+      service.reenviarNotificacao(ordem.id, falho.id),
+      service.reenviarNotificacao(ordem.id, falho.id),
+    ]);
+    expect(resultados.filter((item) => item.status === "fulfilled")).toHaveLength(1);
+    expect(resultados.filter((item) => item.status === "rejected")).toHaveLength(1);
+    expect(await service.listEventos(ordem.id)).toHaveLength(2);
+  });
+
+  it("recupera notificação PENDENTE abandonada", async () => {
+    const { service, ordem, repo, whatsapp } = await comOrdem();
+    const criado = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    const persistida = repo.items[0].historico[1];
+    persistida.notificacao = {
+      status: EStatusNotificacao.PENDENTE,
+      tentativaId: "tentativa-abandonada",
+      ultimaTentativaEm: new Date(Date.now() - 31_000),
+      resultadoEnvio: EResultadoEnvio.INCERTO,
+    };
+
+    const recuperado = await service.reenviarNotificacao(ordem.id, criado.id);
+    expect(recuperado.notificacao.status).toBe(EStatusNotificacao.ENVIADA);
+    expect(whatsapp.enviar).toHaveBeenCalledTimes(2);
+  });
+
+  it("não reenvia PENDENTE recente", async () => {
+    const { service, ordem, repo } = await comOrdem();
+    const criado = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    repo.items[0].historico[1].notificacao = {
+      status: EStatusNotificacao.PENDENTE,
+      tentativaId: "tentativa-recente",
+      ultimaTentativaEm: new Date(),
+      resultadoEnvio: null,
+    };
+    await expect(service.reenviarNotificacao(ordem.id, criado.id)).rejects.toBeInstanceOf(ConflictError);
   });
 });

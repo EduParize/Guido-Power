@@ -4,6 +4,10 @@ import { createEventoRouter } from "../../application/controllers/evento.control
 import { createOrdemServicoRouter } from "../../application/controllers/ordem-servico.controller";
 import { errorHandler } from "../../application/middleware/error-handler.middleware";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
+import {
+  EResultadoEnvio,
+  EStatusNotificacao,
+} from "../../domain/ordem-servico/entity/evento.entity";
 import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-servico.service";
 import { FakeOrdemServicoRepository, ordemInput } from "../mocks/ordem-servico.fakes";
 
@@ -44,11 +48,22 @@ describe("/api/ordens-servico/:ordemServicoId/eventos", () => {
     const lista = await request(app).get(base);
     expect(lista.status).toBe(200);
     expect(lista.body).toHaveLength(1);
-    expect(lista.body[0]).toEqual({ id: expect.any(String), status: EStatus.EM_ESPERA, data: expect.any(String) });
+    expect(lista.body[0]).toMatchObject({
+      id: expect.any(String),
+      status: EStatus.EM_ESPERA,
+      data: expect.any(String),
+      motivo: null,
+      notificacao: { status: EStatusNotificacao.NAO_APLICAVEL },
+    });
 
     const criado = await request(app).post(base).send({ status: EStatus.DIAGNOSTICO, data: "2026-10-20T13:00:00.000Z" });
     expect(criado.status).toBe(201);
-    expect(criado.body).toEqual({ id: expect.any(String), status: EStatus.DIAGNOSTICO, data: "2026-10-20T13:00:00.000Z" });
+    expect(criado.body).toMatchObject({
+      id: expect.any(String),
+      status: EStatus.DIAGNOSTICO,
+      data: "2026-10-20T13:00:00.000Z",
+      notificacao: { status: EStatusNotificacao.ENVIADA },
+    });
     expect(whatsapp.enviar).toHaveBeenCalledTimes(1);
     const eventoId = criado.body.id;
 
@@ -106,5 +121,27 @@ describe("/api/ordens-servico/:ordemServicoId/eventos", () => {
     expect((await request(app).get(`${base}/${EVENTO_INEXISTENTE}`)).status).toBe(404);
     expect((await request(app).put(`${base}/${EVENTO_INEXISTENTE}`).send({ status: EStatus.FINALIZADO })).status).toBe(404);
     expect((await request(app).delete(`${base}/${EVENTO_INEXISTENTE}`)).status).toBe(404);
+  });
+
+  it("retorna 502 com eventoId e permite reenviar sem duplicar", async () => {
+    const { app, whatsapp } = makeApp();
+    const ordemId = await criarOrdem(app);
+    const base = `/api/ordens-servico/${ordemId}/eventos`;
+    whatsapp.enviar.mockRejectedValueOnce(new Error("Falha de rede"));
+
+    const falha = await request(app).post(base).send({ status: EStatus.DIAGNOSTICO });
+    expect(falha.status).toBe(502);
+    expect(falha.body).toMatchObject({
+      eventoId: expect.any(String),
+      resultadoEnvio: EResultadoEnvio.INCERTO,
+    });
+    expect(falha.body.error).toContain("pode duplicar a mensagem externa");
+
+    const reenvio = await request(app)
+      .post(`${base}/${falha.body.eventoId}/notificacao`)
+      .send();
+    expect(reenvio.status).toBe(200);
+    expect(reenvio.body.notificacao.status).toBe(EStatusNotificacao.ENVIADA);
+    expect((await request(app).get(base)).body).toHaveLength(2);
   });
 });
