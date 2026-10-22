@@ -46,13 +46,15 @@ backend/src/
 ├── app.ts                    # monta o Express e as rotas
 ├── application/
 │   ├── controllers/          # um arquivo por contexto
-│   └── middleware/           # error-handler
+│   ├── mappers/              # request/response HTTP ↔ domínio
+│   ├── middleware/           # error-handler
+│   └── validation/           # validações HTTP agnósticas de banco
 ├── configuration/
 │   ├── dotenv.ts
 │   ├── env-constants/        # leitura e checagem do .env
 │   └── factory/              # liga service ↔ repository
 ├── domain/
-│   ├── common/errors/        # AppError, ValidationError, NotFoundError
+│   ├── common/errors/        # AppError, ValidationError, NotFoundError, ConflictError, NotificationError
 │   ├── server/               # bootstrap (server.ts)
 │   └── <contexto>/
 ├── infraestructure/
@@ -108,13 +110,19 @@ O controller fica em `application/controllers/<contexto>.controller.ts` e a fact
 
 Chamada a serviço de terceiro segue o mesmo corte do repositório: o service depende de um contrato no domain e a factory liga a implementação em `infraestructure/external-service/`. Controller e service não fazem `fetch` nem leem token.
 
+Entidade que só existe dentro de outra vira subdocumento, sem collection própria. É o caso de `Evento` (histórico de status), guardado em `OrdemServico.historico`. A rota dele é aninhada (`/api/ordens-servico/:ordemServicoId/eventos`, com `Router({ mergeParams: true })`), as regras ficam no `OrdemServicoService` e a persistência usa os repositories da ordem com operações atômicas (`$push`, `$set` com `arrayFilters`, `$pull`). `OrdemServico.status` reflete o último evento do histórico.
+
+As mutações do histórico usam `historicoVersao` como compare-and-set. Toda alteração incrementa essa versão; uma escrita baseada em uma leitura ultrapassada retorna conflito HTTP `409`. O histórico nunca fica vazio e não aceita status consecutivos iguais.
+
+Cada evento registra o estado da notificação (`NAO_APLICAVEL`, `PENDENTE`, `ENVIADA` ou `FALHA`). Falha de envio não remove o evento: a API responde `502` com o `eventoId`, e `POST /api/ordens-servico/:ordemServicoId/eventos/:eventoId/notificacao` permite reenvio manual. `ENVIADA` significa que a Zenvia aceitou a requisição com HTTP 2xx, não que o destinatário recebeu a mensagem. Após timeout, o resultado é incerto e o reenvio pode duplicar a mensagem externa, pois o endpoint usado não documenta chave de idempotência.
+
 ---
 
 ## 4. Validação e erros
 
-- O controller valida body e query antes de chamar o service. Campo ausente ou inválido gera `ValidationError` (HTTP `400`).
-- O service lança `NotFoundError` (`404`) ou `AppError` com o status adequado.
-- `application/middleware/error-handler.middleware.ts` converte `AppError` em `{ "error": "mensagem" }`; qualquer outro erro vira `500`.
+- O controller valida body e query antes de chamar o service. Campo ausente ou inválido gera `ValidationError` (HTTP `400`). Ids de rota usam o validador em `application/validation/`, sem importar Mongoose.
+- O service lança `NotFoundError` (`404`), `ConflictError` (`409`) ou `AppError` com o status adequado.
+- `application/middleware/error-handler.middleware.ts` converte `AppError` em `{ "error": "mensagem" }` e inclui `details` quando existirem (ex.: falha de WhatsApp vira `502` com `eventoId` e `resultadoEnvio`). Qualquer outro erro vira `500`.
 - O `.env` é conferido em `configuration/env-constants/env.ts` na subida do servidor: sem `MONGO_URI` válido, ou sem as chaves da Zenvia, a API não inicia.
 
 ---
@@ -124,6 +132,7 @@ Chamada a serviço de terceiro segue o mesmo corte do repositório: o service de
 - **MongoDB** é a única fonte de dados.
 - **Mongoose** fica só em `infraestructure` (schemas, models, repositories).
 - Conexão via `MONGO_URI` (ver `.env.example` e Docker Compose). Dentro da rede Docker o host é `mongo`.
+- Valores monetários ficam em centavos inteiros no domínio e no Mongo. A camada `application` converte requests em reais para centavos e responses em centavos para reais; repositories não fazem conversão monetária.
 
 ---
 
@@ -141,7 +150,7 @@ backend/src/tests/
 | Tipo | Foco |
 |------|------|
 | Unitário | Service (prioridade) — regras com repository mockado |
-| Integração | Controller (HTTP via Supertest) |
+| Integração | Controller (HTTP via Supertest) e repository Mongo isolado (`mongodb-memory-server`) |
 
 Rodar: `npm test` dentro de `backend/`, ou `docker compose -f docker-compose.dev.yml exec backend npm test`.
 

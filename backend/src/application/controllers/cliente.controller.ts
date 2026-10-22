@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response, Router } from "express";
-import { isValidObjectId } from "mongoose";
 import { ValidationError } from "../../domain/common/errors/app-error";
 import { ClienteInput } from "../../domain/cliente/entity/cliente.entity";
 import { ClienteService } from "../../domain/cliente/service/cliente.service";
+import { validaObjectId } from "../validation/object-id.validator";
 
 const CAMPOS_TEXTO = ["nome", "documento", "email", "telefone"] as const;
 
@@ -21,7 +21,7 @@ function validaBody(body: any): ClienteInput {
 }
 
 function validaId(id: string) {
-  if (!isValidObjectId(id)) throw new ValidationError("Id inválido");
+  validaObjectId(id);
 }
 
 export function createClienteRouter(service: ClienteService): Router {

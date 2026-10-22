@@ -1,9 +1,13 @@
 import { ValidationError } from "../../domain/common/errors/app-error";
 import { EDecisao } from "../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
-import { TemplateWhatsapp } from "../../domain/ordem-servico/entity/template-whatsapp";
+import { EStatusNotificacao } from "../../domain/ordem-servico/entity/evento.entity";
 import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-servico.service";
-import { FakeOrdemServicoRepository, ordemInput } from "../mocks/ordem-servico.fakes";
+import {
+  FakeOrdemServicoRepository,
+  ordemDominioInput,
+  ordemDominioUpdateInput,
+} from "../mocks/ordem-servico.fakes";
 
 const VEICULO = "64a000000000000000000010";
 const CLIENTE = "64a000000000000000000020";
@@ -30,106 +34,57 @@ function setup({
 }
 
 describe("OrdemServicoService", () => {
-  it("criar não chama a Zenvia e começa com histórico vazio", async () => {
+  it("criar grava o status inicial como primeiro evento e não chama a Zenvia", async () => {
     const { service, whatsapp } = setup();
-    const ordem = await service.create(ordemInput());
+    const ordem = await service.create(ordemDominioInput(EStatus.DIAGNOSTICO));
     expect(whatsapp.enviar).not.toHaveBeenCalled();
-    expect(ordem.historico).toEqual([]);
-    expect(ordem.orcamento).toBe(15050);
+    expect(ordem.status).toBe(EStatus.DIAGNOSTICO);
+    expect(ordem.historico).toHaveLength(1);
+    expect(ordem.historico[0]).toMatchObject({
+      id: expect.any(String),
+      status: EStatus.DIAGNOSTICO,
+      data: expect.any(Date),
+      motivo: null,
+      notificacao: { status: EStatusNotificacao.NAO_APLICAVEL },
+    });
+    expect(ordem.orcamentoCentavos).toBe(15050);
+    expect(ordem.itens[0].valorUnitarioCentavos).toBe(8025);
     expect(ordem.decisaoData).toBeInstanceOf(Date);
   });
 
+  it("criar pausado ou cancelado exige motivo", async () => {
+    const { service } = setup();
+    await expect(
+      service.create({ ...ordemDominioInput(EStatus.PAUSADO), motivo: undefined }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    const ordem = await service.create(ordemDominioInput(EStatus.CANCELADO));
+    expect(ordem.historico[0].motivo).toBe("Motivo informado");
+    expect(ordem.historico[0].notificacao.status).toBe(EStatusNotificacao.NAO_APLICAVEL);
+  });
+
   it("rejeita veículo inexistente, cliente inexistente e dono diferente", async () => {
-    await expect(setup({ veiculo: null }).service.create(ordemInput())).rejects.toBeInstanceOf(ValidationError);
-    await expect(setup({ cliente: null }).service.create(ordemInput())).rejects.toBeInstanceOf(ValidationError);
+    await expect(setup({ veiculo: null }).service.create(ordemDominioInput())).rejects.toBeInstanceOf(ValidationError);
+    await expect(setup({ cliente: null }).service.create(ordemDominioInput())).rejects.toBeInstanceOf(ValidationError);
     await expect(
-      setup({ veiculo: { id: VEICULO, dono: "64a000000000000000000099" } }).service.create(ordemInput()),
+      setup({ veiculo: { id: VEICULO, dono: "64a000000000000000000099" } }).service.create(ordemDominioInput()),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
-  it("PUT com status novo envia o template e grava o evento", async () => {
+  it("update preserva status e histórico e não chama a Zenvia", async () => {
     const { service, whatsapp } = setup();
-    const ordem = await service.create(ordemInput());
-    const atualizada = await service.update(ordem.id, ordemInput(EStatus.INICIADO));
-    expect(whatsapp.enviar).toHaveBeenCalledWith(expect.objectContaining({
-      para: "54999999999",
-      template: TemplateWhatsapp.ServicoIniciado,
-      campos: expect.objectContaining({
-        nomeCliente: "Ana",
-        veiculo: "Fiat Uno ABC1D23",
-        status: EStatus.INICIADO,
-      }),
-    }));
-    expect(whatsapp.enviar.mock.calls[0][0].campos.motivo).toBeUndefined();
-    expect(atualizada.historico).toHaveLength(1);
-    expect(atualizada.historico[0].status).toBe(EStatus.INICIADO);
-    expect(atualizada.historico[0].motivo).toBeNull();
-  });
-
-  it("pausado envia o motivo e sem motivo é rejeitado", async () => {
-    const { service, whatsapp, repo } = setup();
-    const ordem = await service.create(ordemInput());
-    await expect(service.update(ordem.id, ordemInput(EStatus.PAUSADO))).rejects.toBeInstanceOf(ValidationError);
+    const ordem = await service.create(ordemDominioInput());
+    const atualizada = await service.update(ordem.id, { ...ordemDominioUpdateInput(), descricao: "Revisão completa" });
     expect(whatsapp.enviar).not.toHaveBeenCalled();
-    expect(repo.items[0].status).toBe(EStatus.AGUARDANDO_INICIO);
-
-    await service.update(ordem.id, { ...ordemInput(EStatus.PAUSADO), motivo: "Aguardando peça" });
-    expect(whatsapp.enviar).toHaveBeenCalledWith(expect.objectContaining({
-      para: "54999999999",
-      template: TemplateWhatsapp.ServicoPausado,
-      campos: expect.objectContaining({
-        nomeCliente: "Ana",
-        veiculo: "Fiat Uno ABC1D23",
-        status: EStatus.PAUSADO,
-        motivo: "Aguardando peça",
-      }),
-    }));
+    expect(atualizada.descricao).toBe("Revisão completa");
+    expect(atualizada.status).toBe(EStatus.EM_ESPERA);
+    expect(atualizada.historico).toEqual(ordem.historico);
   });
 
-  it("cancelado envia o template e exige motivo", async () => {
-    const { service, whatsapp } = setup();
-    const ordem = await service.create(ordemInput());
-    await expect(service.update(ordem.id, ordemInput(EStatus.CANCELADO))).rejects.toBeInstanceOf(ValidationError);
-    const atualizada = await service.update(ordem.id, {
-      ...ordemInput(EStatus.CANCELADO),
-      motivo: "Cliente desistiu",
-    });
-    expect(whatsapp.enviar).toHaveBeenCalledWith(expect.objectContaining({
-      para: "54999999999",
-      template: TemplateWhatsapp.ServicoCancelado,
-      campos: expect.objectContaining({
-        nomeCliente: "Ana",
-        veiculo: "Fiat Uno ABC1D23",
-        status: EStatus.CANCELADO,
-        motivo: "Cliente desistiu",
-      }),
-    }));
-    expect(atualizada.status).toBe(EStatus.CANCELADO);
-    expect(atualizada.historico[0].motivo).toBe("Cliente desistiu");
-  });
-
-  it("o mesmo status não reenvia nem duplica o histórico", async () => {
-    const { service, whatsapp } = setup();
-    const ordem = await service.create(ordemInput());
-    await service.update(ordem.id, { ...ordemInput(), descricao: "Revisão completa" });
-    expect(whatsapp.enviar).not.toHaveBeenCalled();
-    expect((await service.getById(ordem.id)).historico).toEqual([]);
-  });
-
-  it("mudar só a decisão não chama a Zenvia e atualiza decisaoData", async () => {
-    const { service, whatsapp } = setup();
-    const ordem = await service.create(ordemInput());
-    const atualizada = await service.update(ordem.id, { ...ordemInput(), decisao: EDecisao.APROVADO });
-    expect(whatsapp.enviar).not.toHaveBeenCalled();
+  it("mudar só a decisão atualiza decisaoData", async () => {
+    const { service } = setup();
+    const ordem = await service.create(ordemDominioInput());
+    const atualizada = await service.update(ordem.id, { ...ordemDominioUpdateInput(), decisao: EDecisao.APROVADO });
+    expect(atualizada.decisao).toBe(EDecisao.APROVADO);
     expect(atualizada.decisaoData.getTime()).toBeGreaterThanOrEqual(ordem.decisaoData.getTime());
-  });
-
-  it("telefone sem dígitos impede o envio e não grava o status", async () => {
-    const { service, repo } = setup({ cliente: { id: CLIENTE, telefone: "---" } });
-    const ordem = await service.create(ordemInput());
-    await expect(
-      service.update(ordem.id, { ...ordemInput(EStatus.FINALIZADO), motivo: "Entregue" }),
-    ).rejects.toBeInstanceOf(ValidationError);
-    expect(repo.items[0].status).toBe(EStatus.AGUARDANDO_INICIO);
   });
 });

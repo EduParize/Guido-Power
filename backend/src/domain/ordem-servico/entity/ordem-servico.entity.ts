@@ -1,18 +1,13 @@
 import { EDecisao } from "./e-decisao";
 import { EStatus } from "./e-status";
 import { ETipo } from "./e-tipo";
+import { Evento, EventoInput } from "./evento.entity";
 
 export type ItemOrdem = {
   descricao: string;
   tipo: ETipo;
   quantidade: number;
-  valorUnitario: number;
-};
-
-export type EventoOrdem = {
-  data: Date;
-  status: EStatus;
-  motivo: string | null;
+  valorUnitarioCentavos: number;
 };
 
 export type OrdemServico = {
@@ -22,14 +17,27 @@ export type OrdemServico = {
   decisao: EDecisao;
   decisaoData: Date;
   descricao: string;
-  orcamento: number;
+  orcamentoCentavos: number;
   status: EStatus;
-  historico: EventoOrdem[];
+  historico: Evento[];
+  historicoVersao: number;
   itens: ItemOrdem[];
 };
 
-export type OrdemServicoGravacao = Omit<OrdemServico, "id">;
+export type OrdemServicoCriacao = Omit<OrdemServico, "id" | "historico"> & {
+  historico: EventoInput[];
+};
 
-export type OrdemServicoInput = Omit<OrdemServicoGravacao, "decisaoData" | "historico"> & {
+export type OrdemServicoAtualizacao = Pick<
+  OrdemServico,
+  "veiculoId" | "clienteId" | "decisao" | "decisaoData" | "descricao" | "orcamentoCentavos" | "itens"
+>;
+
+export type OrdemServicoInput = Omit<
+  OrdemServico,
+  "id" | "decisaoData" | "historico" | "historicoVersao"
+> & {
   motivo?: string;
 };
+
+export type OrdemServicoUpdateInput = Omit<OrdemServicoInput, "status" | "motivo">;

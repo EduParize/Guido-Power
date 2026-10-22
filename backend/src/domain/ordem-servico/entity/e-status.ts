@@ -1,7 +1,9 @@
 export enum EStatus {
-  AGUARDANDO_INICIO = "AGUARDANDO_INICIO",
-  INICIADO = "INICIADO",
-  PAUSADO = "PAUSADO",
-  FINALIZADO = "FINALIZADO",
-  CANCELADO = "CANCELADO",
+  EM_ESPERA = "Em espera",
+  DIAGNOSTICO = "Diagnostico",
+  EM_SERVICO = "Em serviço",
+  AGUARDANDO_PECA = "Aguardando Peça",
+  PAUSADO = "Pausado",
+  FINALIZADO = "Finalizado",
+  CANCELADO = "Cancelado",
 }

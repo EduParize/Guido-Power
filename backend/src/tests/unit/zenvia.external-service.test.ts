@@ -1,5 +1,6 @@
-import { AppError } from "../../domain/common/errors/app-error";
+import { EResultadoEnvio } from "../../domain/ordem-servico/entity/evento.entity";
 import { TemplateWhatsapp } from "../../domain/ordem-servico/entity/template-whatsapp";
+import { WhatsappTemplateError } from "../../domain/ordem-servico/gateway/whatsapp-template.gateway";
 import { ZenviaExternalService } from "../../infraestructure/external-service/zenvia/zenvia.external-service";
 
 const config = {
@@ -15,20 +16,19 @@ describe("ZenviaExternalService", () => {
     global.fetch = fetchOriginal;
   });
 
-  it("envia o template e o motivo só quando há campos", async () => {
+  it("envia o template com os campos", async () => {
     const fetchMock = jest.fn().mockResolvedValue({ ok: true });
     global.fetch = fetchMock as unknown as typeof fetch;
     const service = new ZenviaExternalService(config);
 
     await service.enviar({
       para: "54999999999",
-      template: TemplateWhatsapp.ServicoPausado,
+      template: TemplateWhatsapp.AguardandoPeca,
       campos: {
         nomeCliente: "Ana",
         veiculo: "Fiat Uno ABC1D23",
         data: "21/10/2026, 18:58",
-        status: "PAUSADO",
-        motivo: "Aguardando peça",
+        status: "Aguardando Peça",
       },
     });
 
@@ -45,38 +45,54 @@ describe("ZenviaExternalService", () => {
           to: "54999999999",
           contents: [{
             type: "template",
-            templateId: TemplateWhatsapp.ServicoPausado,
+            templateId: TemplateWhatsapp.AguardandoPeca,
             fields: {
               nomeCliente: "Ana",
               veiculo: "Fiat Uno ABC1D23",
               data: "21/10/2026, 18:58",
-              status: "PAUSADO",
-              motivo: "Aguardando peça",
+              status: "Aguardando Peça",
             },
           }],
         }),
+        signal: expect.any(AbortSignal),
       }),
     );
   });
 
-  it("resposta que não é 2xx vira 502 sem expor o token", async () => {
+  it("timeout ou erro de rede tem resultado incerto", async () => {
+    global.fetch = jest.fn().mockRejectedValue(new DOMException("timeout", "TimeoutError")) as unknown as typeof fetch;
+    const service = new ZenviaExternalService(config);
+    await expect(service.enviar({
+      para: "54999999999",
+      template: TemplateWhatsapp.Finalizado,
+      campos: { nomeCliente: "Ana", veiculo: "Fiat Uno ABC1D23", data: "21/10/2026, 18:58", status: "Finalizado" },
+    })).rejects.toMatchObject({
+      resultadoEnvio: EResultadoEnvio.INCERTO,
+      message: "Resultado do envio da mensagem no WhatsApp é incerto",
+    });
+  });
+
+  it("resposta que não é 2xx é rejeitada sem expor o token", async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401 }) as unknown as typeof fetch;
     const service = new ZenviaExternalService(config);
     const campos = {
       nomeCliente: "Ana",
       veiculo: "Fiat Uno ABC1D23",
       data: "21/10/2026, 18:58",
-      status: "INICIADO",
+      status: "Em serviço",
     };
     await expect(service.enviar({
       para: "54999999999",
-      template: TemplateWhatsapp.ServicoIniciado,
+      template: TemplateWhatsapp.EmServico,
       campos,
-    })).rejects.toEqual(expect.any(AppError));
+    })).rejects.toEqual(expect.any(WhatsappTemplateError));
     await expect(service.enviar({
       para: "54999999999",
-      template: TemplateWhatsapp.ServicoIniciado,
+      template: TemplateWhatsapp.EmServico,
       campos,
-    })).rejects.toMatchObject({ statusCode: 502, message: "Falha ao enviar mensagem no WhatsApp" });
+    })).rejects.toMatchObject({
+      resultadoEnvio: EResultadoEnvio.REJEITADO,
+      message: "Mensagem rejeitada pela Zenvia",
+    });
   });
 });

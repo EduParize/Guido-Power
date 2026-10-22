@@ -1,11 +1,18 @@
 import { NextFunction, Request, Response, Router } from "express";
-import { isValidObjectId } from "mongoose";
 import { ValidationError } from "../../domain/common/errors/app-error";
 import { EDecisao } from "../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
 import { ETipo } from "../../domain/ordem-servico/entity/e-tipo";
-import { ItemOrdem, OrdemServicoInput } from "../../domain/ordem-servico/entity/ordem-servico.entity";
 import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-servico.service";
+import {
+  ItemOrdemRequest,
+  OrdemServicoBaseRequest,
+  OrdemServicoCreateRequest,
+  toOrdemServicoInput,
+  toOrdemServicoResponse,
+  toOrdemServicoUpdateInput,
+} from "../mappers/ordem-servico.mapper";
+import { validaObjectId } from "../validation/object-id.validator";
 
 function validaEnum<T extends string>(valor: unknown, permitidos: T[], campo: string): T {
   if (typeof valor !== "string" || !permitidos.includes(valor as T)) {
@@ -21,7 +28,14 @@ function validaInteiro(valor: unknown, campo: string): number {
   return valor;
 }
 
-function validaItens(itens: unknown): ItemOrdem[] {
+function validaNumero(valor: unknown, campo: string): number {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) {
+    throw new ValidationError(`Campo '${campo}' deve ser um número`);
+  }
+  return valor;
+}
+
+function validaItens(itens: unknown): ItemOrdemRequest[] {
   if (!Array.isArray(itens)) throw new ValidationError("Campo 'itens' é obrigatório");
   return itens.map((item, indice) => {
     if (typeof item?.descricao !== "string" || !item.descricao.trim()) {
@@ -31,40 +45,48 @@ function validaItens(itens: unknown): ItemOrdem[] {
       descricao: item.descricao.trim(),
       tipo: validaEnum(item.tipo, Object.values(ETipo), `itens[${indice}].tipo`),
       quantidade: validaInteiro(item.quantidade, `itens[${indice}].quantidade`),
-      valorUnitario: validaInteiro(item.valorUnitario, `itens[${indice}].valorUnitario`),
+      valorUnitario: validaNumero(item.valorUnitario, `itens[${indice}].valorUnitario`),
     };
   });
 }
 
-function validaBody(body: any): OrdemServicoInput {
-  if (!isValidObjectId(body?.veiculoId)) throw new ValidationError("Campo 'veiculoId' é inválido");
-  if (!isValidObjectId(body?.clienteId)) throw new ValidationError("Campo 'clienteId' é inválido");
+function validaBodyBase(body: any): OrdemServicoBaseRequest {
+  validaObjectId(body?.veiculoId, "Campo 'veiculoId' é inválido");
+  validaObjectId(body?.clienteId, "Campo 'clienteId' é inválido");
   if (typeof body?.descricao !== "string" || !body.descricao.trim()) {
     throw new ValidationError("Campo 'descricao' é obrigatório");
   }
-  if (typeof body?.orcamento !== "number" || !Number.isFinite(body.orcamento)) {
-    throw new ValidationError("Campo 'orcamento' deve ser um número");
-  }
-  const input: OrdemServicoInput = {
+  return {
     veiculoId: body.veiculoId,
     clienteId: body.clienteId,
     decisao: validaEnum(body.decisao, Object.values(EDecisao), "decisao"),
     descricao: body.descricao.trim(),
-    orcamento: body.orcamento,
-    status: validaEnum(body.status, Object.values(EStatus), "status"),
+    orcamento: validaNumero(body.orcamento, "orcamento"),
     itens: validaItens(body.itens),
   };
-  if (body.motivo !== undefined) {
-    if (typeof body.motivo !== "string" || !body.motivo.trim()) {
-      throw new ValidationError("Campo 'motivo' é obrigatório");
-    }
-    input.motivo = body.motivo.trim();
-  }
-  return input;
 }
 
-function validaId(id: string) {
-  if (!isValidObjectId(id)) throw new ValidationError("Id inválido");
+function validaBodyCriacao(body: any): OrdemServicoCreateRequest {
+  const request: OrdemServicoCreateRequest = {
+    ...validaBodyBase(body),
+    status: validaEnum(body?.status, Object.values(EStatus), "status"),
+  };
+  if (body?.motivo !== undefined) {
+    if (typeof body.motivo !== "string" || !body.motivo.trim()) {
+      throw new ValidationError("Campo 'motivo' deve ser um texto preenchido");
+    }
+    request.motivo = body.motivo.trim();
+  }
+  return request;
+}
+
+function validaBodyAtualizacao(body: any): OrdemServicoBaseRequest {
+  if (body?.status !== undefined || body?.motivo !== undefined) {
+    throw new ValidationError(
+      "Campos 'status' e 'motivo' só podem ser alterados pelos eventos da ordem de serviço",
+    );
+  }
+  return validaBodyBase(body);
 }
 
 export function createOrdemServicoRouter(service: OrdemServicoService): Router {
@@ -72,7 +94,8 @@ export function createOrdemServicoRouter(service: OrdemServicoService): Router {
 
   router.get("/", async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      res.status(200).json(await service.list());
+      const ordens = await service.list();
+      res.status(200).json(ordens.map(toOrdemServicoResponse));
     } catch (e) {
       next(e);
     }
@@ -80,8 +103,9 @@ export function createOrdemServicoRouter(service: OrdemServicoService): Router {
 
   router.get("/:id", async (req, res, next) => {
     try {
-      validaId(req.params.id);
-      res.status(200).json(await service.getById(req.params.id));
+      validaObjectId(req.params.id);
+      const ordem = await service.getById(req.params.id);
+      res.status(200).json(toOrdemServicoResponse(ordem));
     } catch (e) {
       next(e);
     }
@@ -89,7 +113,9 @@ export function createOrdemServicoRouter(service: OrdemServicoService): Router {
 
   router.post("/", async (req, res, next) => {
     try {
-      res.status(201).json(await service.create(validaBody(req.body)));
+      const input = toOrdemServicoInput(validaBodyCriacao(req.body));
+      const ordem = await service.create(input);
+      res.status(201).json(toOrdemServicoResponse(ordem));
     } catch (e) {
       next(e);
     }
@@ -97,8 +123,10 @@ export function createOrdemServicoRouter(service: OrdemServicoService): Router {
 
   router.put("/:id", async (req, res, next) => {
     try {
-      validaId(req.params.id);
-      res.status(200).json(await service.update(req.params.id, validaBody(req.body)));
+      validaObjectId(req.params.id);
+      const input = toOrdemServicoUpdateInput(validaBodyAtualizacao(req.body));
+      const ordem = await service.update(req.params.id, input);
+      res.status(200).json(toOrdemServicoResponse(ordem));
     } catch (e) {
       next(e);
     }
@@ -106,7 +134,7 @@ export function createOrdemServicoRouter(service: OrdemServicoService): Router {
 
   router.delete("/:id", async (req, res, next) => {
     try {
-      validaId(req.params.id);
+      validaObjectId(req.params.id);
       await service.delete(req.params.id);
       res.status(204).send();
     } catch (e) {
