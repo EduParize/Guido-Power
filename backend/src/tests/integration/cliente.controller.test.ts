@@ -5,7 +5,7 @@ import { errorHandler } from "../../application/middleware/error-handler.middlew
 import { ClienteService } from "../../domain/cliente/service/cliente.service";
 import { FakeClienteRepository } from "../mocks/cliente.fakes";
 
-const body = { nome: "Ana", documento: "12345678900", email: "ana@email.com" };
+const body = { nome: "Ana", documento: "12345678900", email: "ana@email.com", telefone: "54999999999" };
 
 function makeApp() {
   const repo = new FakeClienteRepository();

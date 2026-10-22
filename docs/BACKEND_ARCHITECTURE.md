@@ -60,8 +60,9 @@ backend/src/
 │   │   ├── connection.ts
 │   │   ├── schema/
 │   │   └── models/
-│   └── repository/
-│       └── <contexto>/
+│   ├── repository/
+│   │   └── <contexto>/
+│   └── external-service/     # HTTP de terceiros (ex.: Zenvia)
 └── tests/
     ├── mocks/
     ├── unit/
@@ -105,6 +106,8 @@ backend/src/infraestructure/repository/<contexto>/
 
 O controller fica em `application/controllers/<contexto>.controller.ts` e a factory em `configuration/factory/<contexto>.factory.ts`. O controller é montado em `app.ts` sob `/api/<contexto-no-plural>`.
 
+Chamada a serviço de terceiro segue o mesmo corte do repositório: o service depende de um contrato no domain e a factory liga a implementação em `infraestructure/external-service/`. Controller e service não fazem `fetch` nem leem token.
+
 ---
 
 ## 4. Validação e erros
@@ -112,7 +115,7 @@ O controller fica em `application/controllers/<contexto>.controller.ts` e a fact
 - O controller valida body e query antes de chamar o service. Campo ausente ou inválido gera `ValidationError` (HTTP `400`).
 - O service lança `NotFoundError` (`404`) ou `AppError` com o status adequado.
 - `application/middleware/error-handler.middleware.ts` converte `AppError` em `{ "error": "mensagem" }`; qualquer outro erro vira `500`.
-- O `.env` é conferido em `configuration/env-constants/env.ts` na subida do servidor: sem `MONGO_URI` válido a API não inicia.
+- O `.env` é conferido em `configuration/env-constants/env.ts` na subida do servidor: sem `MONGO_URI` válido, ou sem as chaves da Zenvia, a API não inicia.
 
 ---
 
@@ -163,4 +166,4 @@ Use Docker Compose conforme o [README](../README.md):
 
 ## 9. Fora de escopo deste projeto
 
-Não usamos autenticação (JWT, bcrypt, sessões), biblioteca de schema (Zod, Joi), CQRS/MediatR, workers, Kafka, OpenAPI nem PostgreSQL. Persistência é MongoDB; organização é controller → service → repository.
+Não usamos autenticação (JWT, bcrypt, sessões), biblioteca de schema (Zod, Joi), CQRS/MediatR, workers, Kafka, OpenAPI nem PostgreSQL. Persistência é MongoDB; organização é controller → service → repository, e HTTP de terceiro fica em external service.

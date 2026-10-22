@@ -7,5 +7,6 @@ export function toCliente(doc: ClienteDocument): Cliente {
     nome: doc.nome,
     documento: doc.documento,
     email: doc.email,
+    telefone: doc.telefone,
   };
 }

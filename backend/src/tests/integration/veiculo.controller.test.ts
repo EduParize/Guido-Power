@@ -14,7 +14,7 @@ function makeApp() {
   const service = new VeiculoService(
     repo, repo,
     { findById: async (id: string) => ({ id }) } as any,
-    { existsByVeiculoId: async () => false },
+    { existsByVeiculoId: async () => false } as any,
   );
   const app = express();
   app.use(express.json());

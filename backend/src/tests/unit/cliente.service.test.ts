@@ -2,7 +2,7 @@ import { FakeClienteRepository } from "../mocks/cliente.fakes";
 import { ClienteService } from "../../domain/cliente/service/cliente.service";
 import { AppError, NotFoundError } from "../../domain/common/errors/app-error";
 
-const base = { nome: "Ana", documento: "12345678900", email: "ana@email.com" };
+const base = { nome: "Ana", documento: "12345678900", email: "ana@email.com", telefone: "54999999999" };
 
 function setup({ temVeiculo = false } = {}) {
   const repo = new FakeClienteRepository();

@@ -4,7 +4,7 @@ import { ValidationError } from "../../domain/common/errors/app-error";
 import { ClienteInput } from "../../domain/cliente/entity/cliente.entity";
 import { ClienteService } from "../../domain/cliente/service/cliente.service";
 
-const CAMPOS_TEXTO = ["nome", "documento", "email"] as const;
+const CAMPOS_TEXTO = ["nome", "documento", "email", "telefone"] as const;
 
 function validaBody(body: any): ClienteInput {
   for (const campo of CAMPOS_TEXTO) {
@@ -16,6 +16,7 @@ function validaBody(body: any): ClienteInput {
     nome: body.nome.trim(),
     documento: body.documento.trim(),
     email: body.email.trim(),
+    telefone: body.telefone.trim(),
   };
 }
 
