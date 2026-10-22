@@ -9,7 +9,7 @@ function setup({ clienteExiste = true, temOrdem = false } = {}) {
   const repo = new FakeVeiculoRepository();
   const clienteRepo = { findById: jest.fn().mockResolvedValue(clienteExiste ? { id: DONO } : null) };
   const ordemRepo = { existsByVeiculoId: jest.fn().mockResolvedValue(temOrdem) };
-  const service = new VeiculoService(repo, repo, clienteRepo as any, ordemRepo);
+  const service = new VeiculoService(repo, repo, clienteRepo as any, ordemRepo as any);
   return { service, repo };
 }
 
