@@ -1,5 +1,10 @@
-import { AppError } from "../../../domain/common/errors/app-error";
-import { CamposTemplate, EnvioTemplate, WhatsappTemplateGateway } from "../../../domain/ordem-servico/gateway/whatsapp-template.gateway";
+import { EResultadoEnvio } from "../../../domain/ordem-servico/entity/evento.entity";
+import {
+  CamposTemplate,
+  EnvioTemplate,
+  WhatsappTemplateError,
+  WhatsappTemplateGateway,
+} from "../../../domain/ordem-servico/gateway/whatsapp-template.gateway";
 
 const TIMEOUT_MS = 10000;
 
@@ -36,12 +41,17 @@ export class ZenviaExternalService implements WhatsappTemplateGateway {
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch {
-      // timeout ou erro de rede
-      throw new AppError("Falha ao enviar mensagem no WhatsApp", 502);
+      throw new WhatsappTemplateError(
+        "Resultado do envio da mensagem no WhatsApp é incerto",
+        EResultadoEnvio.INCERTO,
+      );
     }
 
     if (!response.ok) {
-      throw new AppError("Falha ao enviar mensagem no WhatsApp", 502);
+      throw new WhatsappTemplateError(
+        "Mensagem rejeitada pela Zenvia",
+        EResultadoEnvio.REJEITADO,
+      );
     }
   }
 }

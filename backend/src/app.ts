@@ -28,7 +28,7 @@ export function createApp(): Express {
   const ordemServicoService = makeOrdemServicoService();
   app.use("/api/ordens-servico/:ordemServicoId/eventos", createEventoRouter(ordemServicoService));
   app.use("/api/ordens-servico", createOrdemServicoRouter(ordemServicoService));
-  
+
   app.use(errorHandler);
 
   return app;

@@ -8,7 +8,10 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   if (error instanceof AppError) {
-    response.status(error.statusCode).json({ error: error.message });
+    response.status(error.statusCode).json({
+      error: error.message,
+      ...error.details,
+    });
     return;
   }
 

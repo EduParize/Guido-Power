@@ -7,7 +7,7 @@ export type ItemOrdem = {
   descricao: string;
   tipo: ETipo;
   quantidade: number;
-  valorUnitario: number;
+  valorUnitarioCentavos: number;
 };
 
 export type OrdemServico = {
@@ -17,10 +17,10 @@ export type OrdemServico = {
   decisao: EDecisao;
   decisaoData: Date;
   descricao: string;
-  orcamento: number;
-  // Reflete o último evento do histórico; só muda pelos eventos.
+  orcamentoCentavos: number;
   status: EStatus;
   historico: Evento[];
+  historicoVersao: number;
   itens: ItemOrdem[];
 };
 
@@ -28,9 +28,16 @@ export type OrdemServicoCriacao = Omit<OrdemServico, "id" | "historico"> & {
   historico: EventoInput[];
 };
 
-// O update da OS não mexe em status nem em historico.
-export type OrdemServicoAtualizacao = Omit<OrdemServico, "id" | "status" | "historico">;
+export type OrdemServicoAtualizacao = Pick<
+  OrdemServico,
+  "veiculoId" | "clienteId" | "decisao" | "decisaoData" | "descricao" | "orcamentoCentavos" | "itens"
+>;
 
-export type OrdemServicoInput = Omit<OrdemServico, "id" | "decisaoData" | "historico">;
+export type OrdemServicoInput = Omit<
+  OrdemServico,
+  "id" | "decisaoData" | "historico" | "historicoVersao"
+> & {
+  motivo?: string;
+};
 
-export type OrdemServicoUpdateInput = Omit<OrdemServicoInput, "status">;
+export type OrdemServicoUpdateInput = Omit<OrdemServicoInput, "status" | "motivo">;
