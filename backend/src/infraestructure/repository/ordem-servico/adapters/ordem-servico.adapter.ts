@@ -15,7 +15,9 @@ function toItem(item: { descricao: string; tipo: string; quantidade: number; val
   };
 }
 
-export function toEvento(evento: { _id: Types.ObjectId; data: Date; status: string }): Evento {
+export type EventoDocument = { _id: Types.ObjectId; data: Date; status: string };
+
+export function toEvento(evento: EventoDocument): Evento {
   return {
     id: evento._id.toString(),
     status: evento.status as EStatus,
@@ -33,7 +35,7 @@ export function toOrdemServico(doc: OrdemServicoDocument): OrdemServico {
     descricao: doc.descricao,
     orcamento: doc.orcamento,
     status: doc.status as EStatus,
-    historico: ((doc.historico ?? []) as { _id: Types.ObjectId; data: Date; status: string }[]).map(toEvento),
+    historico: ((doc.historico ?? []) as EventoDocument[]).map(toEvento),
     itens: (doc.itens ?? []).map(toItem),
   };
 }

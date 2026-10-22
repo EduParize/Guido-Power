@@ -4,6 +4,7 @@ import { errorHandler } from "./application/middleware/error-handler.middleware"
 
 import usuarioController from "./application/controllers/usuario.controller";
 
+import { createEventoRouter } from "./application/controllers/evento.controller";
 import { createClienteRouter } from "./application/controllers/cliente.controller";
 import { createOrdemServicoRouter } from "./application/controllers/ordem-servico.controller";
 import { createVeiculoRouter } from "./application/controllers/veiculo.controller";
@@ -24,7 +25,9 @@ export function createApp(): Express {
   app.use("/api/usuarios", usuarioController);
   app.use("/api/clientes", createClienteRouter(makeClienteService()));
   app.use("/api/veiculos", createVeiculoRouter(makeVeiculoService()));
-  app.use("/api/ordens-servico", createOrdemServicoRouter(makeOrdemServicoService()));
+  const ordemServicoService = makeOrdemServicoService();
+  app.use("/api/ordens-servico/:ordemServicoId/eventos", createEventoRouter(ordemServicoService));
+  app.use("/api/ordens-servico", createOrdemServicoRouter(ordemServicoService));
   
   app.use(errorHandler);
 

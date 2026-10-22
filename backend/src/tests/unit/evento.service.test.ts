@@ -1,0 +1,157 @@
+import { NotFoundError, ValidationError } from "../../domain/common/errors/app-error";
+import { EStatus } from "../../domain/ordem-servico/entity/e-status";
+import { TemplateWhatsapp } from "../../domain/ordem-servico/entity/template-whatsapp";
+import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-servico.service";
+import { FakeOrdemServicoRepository, ordemInput } from "../mocks/ordem-servico.fakes";
+
+const VEICULO = "64a000000000000000000010";
+const CLIENTE = "64a000000000000000000020";
+const INEXISTENTE = "64d000000000000000000099";
+const EVENTO_INEXISTENTE = "64e000000000000000000099";
+
+function setup(telefone = "(54) 99999-9999") {
+  const repo = new FakeOrdemServicoRepository();
+  const whatsapp = { enviar: jest.fn().mockResolvedValue(undefined) };
+  const service = new OrdemServicoService(
+    repo,
+    repo,
+    { findById: jest.fn().mockResolvedValue({ id: VEICULO, dono: CLIENTE, marca: "Fiat", modelo: "Uno", placa: "ABC1D23" }) } as any,
+    { findById: jest.fn().mockResolvedValue({ id: CLIENTE, nome: "Ana", telefone }) } as any,
+    whatsapp,
+  );
+  return { service, repo, whatsapp };
+}
+
+async function comOrdem(telefone?: string) {
+  const ctx = setup(telefone);
+  const ordem = await ctx.service.create(ordemInput(EStatus.EM_ESPERA));
+  return { ...ctx, ordem, primeiro: ordem.historico[0] };
+}
+
+describe("OrdemServicoService - eventos", () => {
+  let consoleError: jest.SpyInstance;
+  beforeEach(() => {
+    consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+  afterEach(() => consoleError.mockRestore());
+
+  it("ordem inexistente gera NotFoundError em list/get/add/update/remove", async () => {
+    const { service } = setup();
+    await expect(service.listEventos(INEXISTENTE)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.getEvento(INEXISTENTE, EVENTO_INEXISTENTE)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.addEvento(INEXISTENTE, { status: EStatus.DIAGNOSTICO })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(
+      service.updateEvento(INEXISTENTE, EVENTO_INEXISTENTE, { status: EStatus.DIAGNOSTICO }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.removeEvento(INEXISTENTE, EVENTO_INEXISTENTE)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("lista e busca eventos da ordem", async () => {
+    const { service, ordem, primeiro } = await comOrdem();
+    expect(await service.listEventos(ordem.id)).toEqual([primeiro]);
+    expect(await service.getEvento(ordem.id, primeiro.id)).toEqual(primeiro);
+    await expect(service.getEvento(ordem.id, EVENTO_INEXISTENTE)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("status inválido e data inválida geram ValidationError", async () => {
+    const { service, ordem, primeiro } = await comOrdem();
+    await expect(service.addEvento(ordem.id, { status: "Pausado" as EStatus })).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO, data: new Date("xx") }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.updateEvento(ordem.id, primeiro.id, { status: "X" as EStatus })).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.updateEvento(ordem.id, primeiro.id, {})).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("add sem data usa a data atual e com data usa a informada", async () => {
+    const { service, ordem } = await comOrdem();
+    const antes = Date.now();
+    const semData = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    expect(semData.data.getTime()).toBeGreaterThanOrEqual(antes);
+    expect(semData.data.getTime()).toBeLessThanOrEqual(Date.now());
+
+    const data = new Date("2026-10-20T13:00:00.000Z");
+    const comData = await service.addEvento(ordem.id, { status: EStatus.EM_SERVICO, data });
+    expect(comData.data).toEqual(data);
+  });
+
+  it("update e delete de evento inexistente geram NotFoundError", async () => {
+    const { service, ordem } = await comOrdem();
+    await expect(
+      service.updateEvento(ordem.id, EVENTO_INEXISTENTE, { status: EStatus.FINALIZADO }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.removeEvento(ordem.id, EVENTO_INEXISTENTE)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("status da OS acompanha o último evento no add, update e remove", async () => {
+    const { service, ordem, primeiro } = await comOrdem();
+    const status = async () => (await service.getById(ordem.id)).status;
+
+    const diagnostico = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    expect(await status()).toBe(EStatus.DIAGNOSTICO);
+
+    // editar um evento que não é o último não muda o status da OS
+    await service.updateEvento(ordem.id, primeiro.id, { status: EStatus.AGUARDANDO_PECA });
+    expect(await status()).toBe(EStatus.DIAGNOSTICO);
+
+    await service.updateEvento(ordem.id, diagnostico.id, { status: EStatus.EM_SERVICO });
+    expect(await status()).toBe(EStatus.EM_SERVICO);
+
+    // remover o último volta ao status do anterior
+    await service.removeEvento(ordem.id, diagnostico.id);
+    expect(await status()).toBe(EStatus.AGUARDANDO_PECA);
+
+    // histórico vazio mantém o status atual
+    await service.removeEvento(ordem.id, primeiro.id);
+    expect(await service.listEventos(ordem.id)).toEqual([]);
+    expect(await status()).toBe(EStatus.AGUARDANDO_PECA);
+  });
+
+  it("add envia o WhatsApp com o template do status", async () => {
+    const { service, ordem, whatsapp } = await comOrdem();
+    const data = new Date("2026-10-20T13:00:00.000Z");
+    await service.addEvento(ordem.id, { status: EStatus.AGUARDANDO_PECA, data });
+    expect(whatsapp.enviar).toHaveBeenCalledWith({
+      para: "54999999999",
+      template: TemplateWhatsapp.AguardandoPeca,
+      campos: {
+        nomeCliente: "Ana",
+        veiculo: "Fiat Uno ABC1D23",
+        data: "20/10/2026, 10:00",
+        status: EStatus.AGUARDANDO_PECA,
+      },
+    });
+  });
+
+  it("update do status do último evento notifica; outros casos não", async () => {
+    const { service, ordem, primeiro, whatsapp } = await comOrdem();
+    const ultimo = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    whatsapp.enviar.mockClear();
+
+    await service.updateEvento(ordem.id, primeiro.id, { status: EStatus.EM_SERVICO });
+    await service.updateEvento(ordem.id, ultimo.id, { data: new Date() });
+    await service.updateEvento(ordem.id, ultimo.id, { status: EStatus.DIAGNOSTICO });
+    expect(whatsapp.enviar).not.toHaveBeenCalled();
+
+    await service.updateEvento(ordem.id, ultimo.id, { status: EStatus.FINALIZADO });
+    expect(whatsapp.enviar).toHaveBeenCalledTimes(1);
+    expect(whatsapp.enviar.mock.calls[0][0].template).toBe(TemplateWhatsapp.Finalizado);
+  });
+
+  it("falha da Zenvia não desfaz o evento gravado", async () => {
+    const { service, ordem, whatsapp } = await comOrdem();
+    whatsapp.enviar.mockRejectedValueOnce(new Error("Zenvia fora"));
+    const evento = await service.addEvento(ordem.id, { status: EStatus.FINALIZADO });
+    expect(await service.getEvento(ordem.id, evento.id)).toEqual(evento);
+    expect((await service.getById(ordem.id)).status).toBe(EStatus.FINALIZADO);
+    expect(consoleError).toHaveBeenCalled();
+  });
+
+  it("telefone sem dígitos não envia, mas grava o evento", async () => {
+    const { service, ordem, whatsapp } = await comOrdem("---");
+    const evento = await service.addEvento(ordem.id, { status: EStatus.DIAGNOSTICO });
+    expect(whatsapp.enviar).not.toHaveBeenCalled();
+    expect(await service.getEvento(ordem.id, evento.id)).toEqual(evento);
+    expect(consoleError).toHaveBeenCalled();
+  });
+});
