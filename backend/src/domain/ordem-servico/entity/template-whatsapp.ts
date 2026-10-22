@@ -1,7 +1,7 @@
 export enum TemplateWhatsapp {
-  AguardandoInicioDeServico = "aguardando-inicio-de-serviço",
-  ServicoIniciado = "serviço-iniciado",
-  ServicoPausado = "serviço-pausado",
-  ServicoFinalizado = "serviço-finalizado",
-  ServicoCancelado = "serviço-cancelado",
+  EmEspera = "em-espera",
+  Diagnostico = "diagnostico",
+  EmServico = "em-servico",
+  AguardandoPeca = "aguardando-peca",
+  Finalizado = "finalizado",
 }

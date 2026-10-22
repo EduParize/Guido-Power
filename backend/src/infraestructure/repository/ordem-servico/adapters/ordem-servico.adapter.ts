@@ -1,7 +1,9 @@
+import { Types } from "mongoose";
 import { EDecisao } from "../../../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../../../domain/ordem-servico/entity/e-status";
 import { ETipo } from "../../../../domain/ordem-servico/entity/e-tipo";
-import { EventoOrdem, ItemOrdem, OrdemServico } from "../../../../domain/ordem-servico/entity/ordem-servico.entity";
+import { Evento } from "../../../../domain/ordem-servico/entity/evento.entity";
+import { ItemOrdem, OrdemServico } from "../../../../domain/ordem-servico/entity/ordem-servico.entity";
 import { OrdemServicoDocument } from "../../../db/mongo/schema/ordem-servico.schema";
 
 function toItem(item: { descricao: string; tipo: string; quantidade: number; valorUnitario: number }): ItemOrdem {
@@ -13,11 +15,11 @@ function toItem(item: { descricao: string; tipo: string; quantidade: number; val
   };
 }
 
-function toEvento(evento: { data: Date; status: string; motivo?: string | null }): EventoOrdem {
+export function toEvento(evento: { _id: Types.ObjectId; data: Date; status: string }): Evento {
   return {
-    data: evento.data,
+    id: evento._id.toString(),
     status: evento.status as EStatus,
-    motivo: evento.motivo ?? null,
+    data: evento.data,
   };
 }
 
@@ -31,7 +33,7 @@ export function toOrdemServico(doc: OrdemServicoDocument): OrdemServico {
     descricao: doc.descricao,
     orcamento: doc.orcamento,
     status: doc.status as EStatus,
-    historico: (doc.historico ?? []).map(toEvento),
+    historico: ((doc.historico ?? []) as { _id: Types.ObjectId; data: Date; status: string }[]).map(toEvento),
     itens: (doc.itens ?? []).map(toItem),
   };
 }

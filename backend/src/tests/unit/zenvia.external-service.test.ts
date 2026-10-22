@@ -15,20 +15,19 @@ describe("ZenviaExternalService", () => {
     global.fetch = fetchOriginal;
   });
 
-  it("envia o template e o motivo só quando há campos", async () => {
+  it("envia o template com os campos", async () => {
     const fetchMock = jest.fn().mockResolvedValue({ ok: true });
     global.fetch = fetchMock as unknown as typeof fetch;
     const service = new ZenviaExternalService(config);
 
     await service.enviar({
       para: "54999999999",
-      template: TemplateWhatsapp.ServicoPausado,
+      template: TemplateWhatsapp.AguardandoPeca,
       campos: {
         nomeCliente: "Ana",
         veiculo: "Fiat Uno ABC1D23",
         data: "21/10/2026, 18:58",
-        status: "PAUSADO",
-        motivo: "Aguardando peça",
+        status: "Aguardando Peça",
       },
     });
 
@@ -45,13 +44,12 @@ describe("ZenviaExternalService", () => {
           to: "54999999999",
           contents: [{
             type: "template",
-            templateId: TemplateWhatsapp.ServicoPausado,
+            templateId: TemplateWhatsapp.AguardandoPeca,
             fields: {
               nomeCliente: "Ana",
               veiculo: "Fiat Uno ABC1D23",
               data: "21/10/2026, 18:58",
-              status: "PAUSADO",
-              motivo: "Aguardando peça",
+              status: "Aguardando Peça",
             },
           }],
         }),
@@ -66,16 +64,16 @@ describe("ZenviaExternalService", () => {
       nomeCliente: "Ana",
       veiculo: "Fiat Uno ABC1D23",
       data: "21/10/2026, 18:58",
-      status: "INICIADO",
+      status: "Em serviço",
     };
     await expect(service.enviar({
       para: "54999999999",
-      template: TemplateWhatsapp.ServicoIniciado,
+      template: TemplateWhatsapp.EmServico,
       campos,
     })).rejects.toEqual(expect.any(AppError));
     await expect(service.enviar({
       para: "54999999999",
-      template: TemplateWhatsapp.ServicoIniciado,
+      template: TemplateWhatsapp.EmServico,
       campos,
     })).rejects.toMatchObject({ statusCode: 502, message: "Falha ao enviar mensagem no WhatsApp" });
   });

@@ -1,7 +1,7 @@
-import { OrdemServico, OrdemServicoGravacao } from "../entity/ordem-servico.entity";
+import { OrdemServico, OrdemServicoAtualizacao, OrdemServicoCriacao } from "../entity/ordem-servico.entity";
 
 export interface OrdemServicoRepositoryWrite {
-  create(data: OrdemServicoGravacao): Promise<OrdemServico>;
-  update(id: string, data: OrdemServicoGravacao): Promise<OrdemServico | null>;
+  create(data: OrdemServicoCriacao): Promise<OrdemServico>;
+  update(id: string, data: OrdemServicoAtualizacao): Promise<OrdemServico | null>;
   delete(id: string): Promise<boolean>;
 }

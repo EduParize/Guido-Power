@@ -4,7 +4,7 @@ import { ValidationError } from "../../domain/common/errors/app-error";
 import { EDecisao } from "../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
 import { ETipo } from "../../domain/ordem-servico/entity/e-tipo";
-import { ItemOrdem, OrdemServicoInput } from "../../domain/ordem-servico/entity/ordem-servico.entity";
+import { ItemOrdem, OrdemServicoInput, OrdemServicoUpdateInput } from "../../domain/ordem-servico/entity/ordem-servico.entity";
 import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-servico.service";
 
 function validaEnum<T extends string>(valor: unknown, permitidos: T[], campo: string): T {
@@ -36,7 +36,7 @@ function validaItens(itens: unknown): ItemOrdem[] {
   });
 }
 
-function validaBody(body: any): OrdemServicoInput {
+function validaBodyBase(body: any): OrdemServicoUpdateInput {
   if (!isValidObjectId(body?.veiculoId)) throw new ValidationError("Campo 'veiculoId' é inválido");
   if (!isValidObjectId(body?.clienteId)) throw new ValidationError("Campo 'clienteId' é inválido");
   if (typeof body?.descricao !== "string" || !body.descricao.trim()) {
@@ -45,22 +45,30 @@ function validaBody(body: any): OrdemServicoInput {
   if (typeof body?.orcamento !== "number" || !Number.isFinite(body.orcamento)) {
     throw new ValidationError("Campo 'orcamento' deve ser um número");
   }
-  const input: OrdemServicoInput = {
+  return {
     veiculoId: body.veiculoId,
     clienteId: body.clienteId,
     decisao: validaEnum(body.decisao, Object.values(EDecisao), "decisao"),
     descricao: body.descricao.trim(),
     orcamento: body.orcamento,
-    status: validaEnum(body.status, Object.values(EStatus), "status"),
     itens: validaItens(body.itens),
   };
-  if (body.motivo !== undefined) {
-    if (typeof body.motivo !== "string" || !body.motivo.trim()) {
-      throw new ValidationError("Campo 'motivo' é obrigatório");
-    }
-    input.motivo = body.motivo.trim();
+}
+
+// No create o status é o status inicial e vira o primeiro evento do histórico.
+function validaBodyCriacao(body: any): OrdemServicoInput {
+  return {
+    ...validaBodyBase(body),
+    status: validaEnum(body?.status, Object.values(EStatus), "status"),
+  };
+}
+
+// No update o status não é aceito: ele só muda por /:ordemServicoId/eventos.
+function validaBodyAtualizacao(body: any): OrdemServicoUpdateInput {
+  if (body?.status !== undefined) {
+    throw new ValidationError("Campo 'status' só pode ser alterado pelos eventos da ordem de serviço");
   }
-  return input;
+  return validaBodyBase(body);
 }
 
 function validaId(id: string) {
@@ -89,7 +97,7 @@ export function createOrdemServicoRouter(service: OrdemServicoService): Router {
 
   router.post("/", async (req, res, next) => {
     try {
-      res.status(201).json(await service.create(validaBody(req.body)));
+      res.status(201).json(await service.create(validaBodyCriacao(req.body)));
     } catch (e) {
       next(e);
     }
@@ -98,7 +106,7 @@ export function createOrdemServicoRouter(service: OrdemServicoService): Router {
   router.put("/:id", async (req, res, next) => {
     try {
       validaId(req.params.id);
-      res.status(200).json(await service.update(req.params.id, validaBody(req.body)));
+      res.status(200).json(await service.update(req.params.id, validaBodyAtualizacao(req.body)));
     } catch (e) {
       next(e);
     }

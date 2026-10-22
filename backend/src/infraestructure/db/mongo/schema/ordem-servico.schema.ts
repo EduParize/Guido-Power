@@ -3,14 +3,11 @@ import { EDecisao } from "../../../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../../../domain/ordem-servico/entity/e-status";
 import { ETipo } from "../../../../domain/ordem-servico/entity/e-tipo";
 
-const eventoSchema = new Schema(
-  {
-    data: { type: Date, required: true },
-    status: { type: String, enum: Object.values(EStatus), required: true },
-    motivo: { type: String, default: null },
-  },
-  { _id: false },
-);
+// Evento do histórico: subdocumento com _id próprio (vira o id na API).
+const eventoSchema = new Schema({
+  data: { type: Date, required: true },
+  status: { type: String, enum: Object.values(EStatus), required: true },
+});
 
 const itemSchema = new Schema(
   {

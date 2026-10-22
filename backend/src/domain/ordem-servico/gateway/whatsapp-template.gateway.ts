@@ -5,7 +5,6 @@ export type CamposTemplate = {
   veiculo: string;
   data: string;
   status: string;
-  motivo?: string;
 };
 
 export type EnvioTemplate = {
