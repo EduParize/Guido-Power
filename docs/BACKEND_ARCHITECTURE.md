@@ -108,6 +108,8 @@ O controller fica em `application/controllers/<contexto>.controller.ts` e a fact
 
 Chamada a serviço de terceiro segue o mesmo corte do repositório: o service depende de um contrato no domain e a factory liga a implementação em `infraestructure/external-service/`. Controller e service não fazem `fetch` nem leem token.
 
+Entidade que só existe dentro de outra vira subdocumento, sem collection própria. É o caso de `Evento` (histórico de status), guardado em `OrdemServico.historico`. A rota dele é aninhada (`/api/ordens-servico/:ordemServicoId/eventos`, com `Router({ mergeParams: true })`), as regras ficam no `OrdemServicoService` e a persistência usa os repositories da ordem com operações atômicas (`$push`, `$set` com `arrayFilters`, `$pull`). `OrdemServico.status` reflete o último evento do histórico.
+
 ---
 
 ## 4. Validação e erros

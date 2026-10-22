@@ -87,7 +87,7 @@ describe("/api/ordens-servico/:ordemServicoId/eventos", () => {
     expect((await request(app).delete(`${base}/abc`)).status).toBe(400);
 
     expect((await request(app).post(base).send({})).status).toBe(400);
-    expect((await request(app).post(base).send({ status: "PAUSADO" })).status).toBe(400);
+    expect((await request(app).post(base).send({ status: "Aberto" })).status).toBe(400);
     expect((await request(app).post(base).send({ status: EStatus.FINALIZADO, data: "ontem" })).status).toBe(400);
     expect((await request(app).post(base).send({ status: EStatus.FINALIZADO, data: 123 })).status).toBe(400);
 
