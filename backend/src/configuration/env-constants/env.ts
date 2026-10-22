@@ -3,6 +3,9 @@ const DEFAULT_PORT = 3000;
 export interface Env {
   PORT: number;
   MONGO_URI: string;
+  ZENVIA_API_URL: string;
+  ZENVIA_API_TOKEN: string;
+  ZENVIA_WHATSAPP_FROM: string;
 }
 
 function parsePort(value: string | undefined): number {
@@ -33,5 +36,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   return {
     PORT: parsePort(source.PORT),
     MONGO_URI: requireString(source, "MONGO_URI"),
+    ZENVIA_API_URL: requireString(source, "ZENVIA_API_URL"),
+    ZENVIA_API_TOKEN: requireString(source, "ZENVIA_API_TOKEN"),
+    ZENVIA_WHATSAPP_FROM: requireString(source, "ZENVIA_WHATSAPP_FROM"),
   };
 }
