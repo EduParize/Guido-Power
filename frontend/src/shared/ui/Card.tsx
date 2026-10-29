@@ -1,16 +1,20 @@
-import type { ReactNode } from 'react'
+import type { ComponentProps } from 'react'
+import { cn } from './cn'
 
-interface CardProps {
-  children: ReactNode
-  title?: string
-  className?: string
+export interface CardProps extends ComponentProps<'div'> {
+  /** Remove o padding interno (tabelas que encostam nas bordas). */
+  flush?: boolean
 }
 
-export function Card({ children, title, className = '' }: CardProps) {
+export function Card({ flush = false, className, ...rest }: CardProps) {
   return (
-    <section className={`rounded-xl border border-slate-200 bg-white p-6 shadow-sm ${className}`}>
-      {title && <h2 className="mb-4 text-base font-semibold text-brand-900">{title}</h2>}
-      {children}
-    </section>
+    <div
+      className={cn(
+        'rounded-lg border border-border bg-surface text-text shadow-card',
+        flush ? 'overflow-hidden' : 'p-5 sm:p-6',
+        className,
+      )}
+      {...rest}
+    />
   )
 }

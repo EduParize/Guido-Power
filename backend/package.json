@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "node dist/domain/server/server.js",
     "dev": "tsx watch src/domain/server/server.ts",
+    "migrate:orcamentos": "tsx src/scripts/migrar-orcamentos.ts",
     "test": "jest"
   },
   "dependencies": {

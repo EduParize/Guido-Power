@@ -13,7 +13,10 @@ import { TemplateWhatsapp } from "../../domain/ordem-servico/entity/template-wha
 import { WhatsappTemplateError } from "../../domain/ordem-servico/gateway/whatsapp-template.gateway";
 import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-servico.service";
 import {
+  FakeOrcamentoRepository,
   FakeOrdemServicoRepository,
+  ORCAMENTO_ID,
+  orcamentoAprovadoSeed,
   ordemDominioInput,
 } from "../mocks/ordem-servico.fakes";
 
@@ -23,8 +26,10 @@ const INEXISTENTE = "64d000000000000000000099";
 const EVENTO_INEXISTENTE = "64e000000000000000000099";
 
 // telefone null simula cliente antigo sem telefone gravado
-function setup(telefone: string | null = "(54) 99999-9999") {
+async function setup(telefone: string | null = "(54) 99999-9999") {
   const repo = new FakeOrdemServicoRepository();
+  const orcamentoRepo = new FakeOrcamentoRepository();
+  orcamentoRepo.items.push(orcamentoAprovadoSeed());
   const whatsapp = { enviar: jest.fn().mockResolvedValue(undefined) };
   const service = new OrdemServicoService(
     repo,
@@ -32,12 +37,13 @@ function setup(telefone: string | null = "(54) 99999-9999") {
     { findById: jest.fn().mockResolvedValue({ id: VEICULO, dono: CLIENTE, marca: "Fiat", modelo: "Uno", placa: "ABC1D23" }) } as any,
     { findById: jest.fn().mockResolvedValue({ id: CLIENTE, nome: "Ana", telefone: telefone ?? undefined }) } as any,
     whatsapp,
+    orcamentoRepo,
   );
   return { service, repo, whatsapp };
 }
 
 async function comOrdem(telefone?: string | null) {
-  const ctx = setup(telefone);
+  const ctx = await setup(telefone);
   const ordem = await ctx.service.create(ordemDominioInput(EStatus.EM_ESPERA));
   return { ...ctx, ordem, primeiro: ordem.historico[0] };
 }
@@ -50,7 +56,7 @@ describe("OrdemServicoService - eventos", () => {
   afterEach(() => consoleError.mockRestore());
 
   it("ordem inexistente gera NotFoundError em list/get/add/update/remove", async () => {
-    const { service } = setup();
+    const { service } = await setup();
     await expect(service.listEventos(INEXISTENTE)).rejects.toBeInstanceOf(NotFoundError);
     await expect(service.getEvento(INEXISTENTE, EVENTO_INEXISTENTE)).rejects.toBeInstanceOf(NotFoundError);
     await expect(service.addEvento(INEXISTENTE, { status: EStatus.DIAGNOSTICO })).rejects.toBeInstanceOf(NotFoundError);

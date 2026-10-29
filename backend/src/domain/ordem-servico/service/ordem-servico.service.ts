@@ -27,6 +27,8 @@ import {
   WhatsappTemplateError,
   WhatsappTemplateGateway,
 } from "../gateway/whatsapp-template.gateway";
+import { EDecisao } from "../../orcamento/entity/e-decisao";
+import { OrcamentoRepositoryRead } from "../../orcamento/repository/orcamento.repository.read";
 import { OrdemServicoRepositoryRead } from "../repository/ordem-servico.repository.read";
 import {
   EventoMutado,
@@ -60,6 +62,7 @@ export class OrdemServicoService {
     private readonly veiculoRepo: VeiculoRepositoryRead,
     private readonly clienteRepo: ClienteRepositoryRead,
     private readonly whatsapp: WhatsappTemplateGateway,
+    private readonly orcamentoRepo: OrcamentoRepositoryRead,
   ) {}
 
   list(): Promise<OrdemServico[]> {
@@ -74,16 +77,15 @@ export class OrdemServicoService {
 
   // O status inicial vira o primeiro evento do histórico (sem WhatsApp).
   async create(input: OrdemServicoInput): Promise<OrdemServico> {
-    await this.garantirVinculo(input.veiculoId, input.clienteId);
+    const veiculo = await this.garantirVinculo(input.veiculoId, input.clienteId);
+    await this.garantirOrcamentoDisponivel(input.orcamentoId, undefined, veiculo.placa);
     const agora = new Date();
     const motivo = this.normalizaMotivo(input.status, input.motivo);
     return this.writeRepo.create({
       veiculoId: input.veiculoId,
       clienteId: input.clienteId,
-      decisao: input.decisao,
-      decisaoData: agora,
+      orcamentoId: input.orcamentoId,
       descricao: input.descricao.trim(),
-      orcamentoCentavos: input.orcamentoCentavos,
       status: input.status,
       historico: [{
         status: input.status,
@@ -92,22 +94,19 @@ export class OrdemServicoService {
         notificacao: this.notificacaoNaoAplicavel(),
       }],
       historicoVersao: 0,
-      itens: input.itens,
     });
   }
 
   async update(id: string, input: OrdemServicoUpdateInput): Promise<OrdemServico> {
-    const atual = await this.getById(id);
-    await this.garantirVinculo(input.veiculoId, input.clienteId);
+    await this.getById(id);
+    const veiculo = await this.garantirVinculo(input.veiculoId, input.clienteId);
+    await this.garantirOrcamentoDisponivel(input.orcamentoId, id, veiculo.placa);
 
     const gravacao: OrdemServicoAtualizacao = {
       veiculoId: input.veiculoId,
       clienteId: input.clienteId,
-      decisao: input.decisao,
-      decisaoData: atual.decisao === input.decisao ? atual.decisaoData : new Date(),
+      orcamentoId: input.orcamentoId,
       descricao: input.descricao.trim(),
-      orcamentoCentavos: input.orcamentoCentavos,
-      itens: input.itens,
     };
     const salva = await this.writeRepo.update(id, gravacao);
     if (!salva) throw new NotFoundError("Ordem de serviço não encontrada");
@@ -360,13 +359,36 @@ export class OrdemServicoService {
     return `55${digitos}`;
   }
 
-  private async garantirVinculo(veiculoId: string, clienteId: string): Promise<void> {
+  private async garantirVinculo(veiculoId: string, clienteId: string) {
     const veiculo = await this.veiculoRepo.findById(veiculoId);
     if (!veiculo) throw new ValidationError("Veículo não encontrado");
     const cliente = await this.clienteRepo.findById(clienteId);
     if (!cliente) throw new ValidationError("Cliente não encontrado");
     if (veiculo.dono !== clienteId) {
       throw new ValidationError("Veículo não pertence ao cliente");
+    }
+    return veiculo;
+  }
+
+  private async garantirOrcamentoDisponivel(
+    orcamentoId: string,
+    excluirOrdemId?: string,
+    placaVeiculo?: string,
+  ): Promise<void> {
+    const orcamento = await this.orcamentoRepo.findById(orcamentoId);
+    if (!orcamento) throw new NotFoundError("Orçamento não encontrado");
+    if (orcamento.decisao !== EDecisao.APROVADO) {
+      throw new ConflictError("Somente orçamentos aprovados podem ser vinculados a uma ordem");
+    }
+    if (await this.readRepo.existsByOrcamentoId(orcamentoId, excluirOrdemId)) {
+      throw new ConflictError("Orçamento já vinculado a outra ordem de serviço");
+    }
+    if (orcamento.placa && placaVeiculo) {
+      const placaOrcamento = orcamento.placa.trim().toUpperCase();
+      const placaOrdem = placaVeiculo.trim().toUpperCase();
+      if (placaOrcamento !== placaOrdem) {
+        throw new ValidationError("Placa do veículo difere da placa do orçamento");
+      }
     }
   }
 

@@ -1,10 +1,28 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>Guido Power</title>
+    <script>
+      // Define o tema antes da primeira pintura (evita flash). Mantém a lógica de ThemeProvider.
+      (function () {
+        var t = null
+        try {
+          var s = localStorage.getItem('gp.theme')
+          if (s === 'light' || s === 'dark' || s === 'contrast') t = s
+        } catch (e) {}
+        if (!t) {
+          t = window.matchMedia('(prefers-contrast: more)').matches
+            ? 'contrast'
+            : window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+        }
+        document.documentElement.setAttribute('data-theme', t)
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

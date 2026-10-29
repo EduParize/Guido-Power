@@ -1,7 +1,4 @@
-import { ValidationError } from "../../domain/common/errors/app-error";
-import { EDecisao } from "../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
-import { ETipo } from "../../domain/ordem-servico/entity/e-tipo";
 import { EStatusNotificacao } from "../../domain/ordem-servico/entity/evento.entity";
 import { OrdemServico } from "../../domain/ordem-servico/entity/ordem-servico.entity";
 import {
@@ -10,33 +7,30 @@ import {
 } from "../../application/mappers/ordem-servico.mapper";
 
 describe("ordem-servico mapper", () => {
-  it("converte 150.50 e 80.25 reais em centavos e devolve em reais", () => {
+  it("mapeia criação com orcamentoId e remove historicoVersao da resposta", () => {
     const input = toOrdemServicoInput({
       veiculoId: "64a000000000000000000010",
       clienteId: "64a000000000000000000020",
-      decisao: EDecisao.PENDENTE,
+      orcamentoId: "64f000000000000000000001",
       descricao: "Revisão",
-      orcamento: 150.5,
       status: EStatus.EM_ESPERA,
-      itens: [{
-        descricao: "Pastilha",
-        tipo: ETipo.PECA,
-        quantidade: 2,
-        valorUnitario: 80.25,
-      }],
     });
 
-    expect(input.orcamentoCentavos).toBe(15050);
-    expect(input.itens[0].valorUnitarioCentavos).toBe(8025);
+    expect(input).toEqual({
+      veiculoId: "64a000000000000000000010",
+      clienteId: "64a000000000000000000020",
+      orcamentoId: "64f000000000000000000001",
+      descricao: "Revisão",
+      status: EStatus.EM_ESPERA,
+      motivo: undefined,
+    });
 
     const ordem: OrdemServico = {
       id: "64d000000000000000000001",
       veiculoId: input.veiculoId,
       clienteId: input.clienteId,
-      decisao: input.decisao,
-      decisaoData: new Date(),
+      orcamentoId: input.orcamentoId,
       descricao: input.descricao,
-      orcamentoCentavos: input.orcamentoCentavos,
       status: input.status,
       historico: [{
         id: "64e000000000000000000001",
@@ -51,30 +45,12 @@ describe("ordem-servico mapper", () => {
         },
       }],
       historicoVersao: 0,
-      itens: input.itens,
     };
 
     const response = toOrdemServicoResponse(ordem);
-    expect(response.orcamento).toBe(150.5);
-    expect(response.itens[0].valorUnitario).toBe(80.25);
-    expect(response).not.toHaveProperty("orcamentoCentavos");
     expect(response).not.toHaveProperty("historicoVersao");
-  });
-
-  it("rejeita valor com mais de duas casas decimais", () => {
-    expect(() => toOrdemServicoInput({
-      veiculoId: "64a000000000000000000010",
-      clienteId: "64a000000000000000000020",
-      decisao: EDecisao.PENDENTE,
-      descricao: "Revisão",
-      orcamento: 10.999,
-      status: EStatus.EM_ESPERA,
-      itens: [{
-        descricao: "Pastilha",
-        tipo: ETipo.PECA,
-        quantidade: 1,
-        valorUnitario: 80,
-      }],
-    })).toThrow(ValidationError);
+    expect(response).not.toHaveProperty("decisao");
+    expect(response.orcamentoId).toBe("64f000000000000000000001");
+    expect(response.descricao).toBe("Revisão");
   });
 });

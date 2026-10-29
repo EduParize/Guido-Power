@@ -5,8 +5,9 @@ import { VeiculoService } from "../../domain/veiculo/service/veiculo.service";
 import { validaObjectId } from "../validation/object-id.validator";
 
 const CAMPOS_TEXTO = ["modelo", "ano", "marca", "placa"] as const;
+const CAMPOS_FROM_ORCAMENTO = ["modelo", "ano", "marca"] as const;
 
-function validaBody(body: any): VeiculoInput {
+function validaBodyCompleto(body: any): VeiculoInput {
   for (const campo of CAMPOS_TEXTO) {
     if (typeof body?.[campo] !== "string" || !body[campo].trim()) {
       throw new ValidationError(`Campo '${campo}' é obrigatório`);
@@ -22,6 +23,32 @@ function validaBody(body: any): VeiculoInput {
     marca: body.marca.trim(),
     placa: body.placa.trim(),
     dono: body.dono,
+  };
+}
+
+function validaBodyFromOrcamento(body: any): {
+  orcamentoId: string;
+  dono: string;
+  marca: string;
+  modelo: string;
+  ano: string;
+} {
+  validaObjectId(body?.orcamentoId, "Campo 'orcamentoId' é inválido");
+  if (typeof body?.dono !== "string") {
+    throw new ValidationError("Campo 'dono' é obrigatório e deve ser um id válido");
+  }
+  validaObjectId(body.dono, "Campo 'dono' é obrigatório e deve ser um id válido");
+  for (const campo of CAMPOS_FROM_ORCAMENTO) {
+    if (typeof body?.[campo] !== "string" || !body[campo].trim()) {
+      throw new ValidationError(`Campo '${campo}' é obrigatório`);
+    }
+  }
+  return {
+    orcamentoId: body.orcamentoId,
+    dono: body.dono,
+    marca: body.marca.trim(),
+    modelo: body.modelo.trim(),
+    ano: body.ano.trim(),
   };
 }
 
@@ -58,7 +85,11 @@ export function createVeiculoRouter(service: VeiculoService): Router {
 
   router.post("/", async (req, res, next) => {
     try {
-      res.status(201).json(await service.create(validaBody(req.body)));
+      if (req.body?.orcamentoId !== undefined) {
+        res.status(201).json(await service.createFromOrcamento(validaBodyFromOrcamento(req.body)));
+        return;
+      }
+      res.status(201).json(await service.create(validaBodyCompleto(req.body)));
     } catch (e) {
       next(e);
     }
@@ -67,7 +98,7 @@ export function createVeiculoRouter(service: VeiculoService): Router {
   router.put("/:id", async (req, res, next) => {
     try {
       validaId(req.params.id);
-      res.status(200).json(await service.update(req.params.id, validaBody(req.body)));
+      res.status(200).json(await service.update(req.params.id, validaBodyCompleto(req.body)));
     } catch (e) {
       next(e);
     }

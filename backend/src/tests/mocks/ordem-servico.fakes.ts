@@ -1,6 +1,4 @@
-import { EDecisao } from "../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
-import { ETipo } from "../../domain/ordem-servico/entity/e-tipo";
 import {
   EResultadoEnvio,
   EStatusNotificacao,
@@ -21,6 +19,15 @@ import {
   OrdemServicoRepositoryWrite,
   ResultadoMutacao,
 } from "../../domain/ordem-servico/repository/ordem-servico.repository.write";
+import { EDecisao } from "../../domain/orcamento/entity/e-decisao";
+import { ETipo } from "../../domain/orcamento/entity/e-tipo";
+import {
+  Orcamento,
+  OrcamentoGravacao,
+  OrcamentoInput,
+} from "../../domain/orcamento/entity/orcamento.entity";
+import { OrcamentoRepositoryRead } from "../../domain/orcamento/repository/orcamento.repository.read";
+import { OrcamentoRepositoryWrite } from "../../domain/orcamento/repository/orcamento.repository.write";
 
 export class FakeOrdemServicoRepository
   implements OrdemServicoRepositoryRead, OrdemServicoRepositoryWrite
@@ -37,6 +44,12 @@ export class FakeOrdemServicoRepository
   async list() { return [...this.items]; }
   async existsByVeiculoId(veiculoId: string) {
     return this.items.some((o) => o.veiculoId === veiculoId);
+  }
+
+  async existsByOrcamentoId(orcamentoId: string, excluirOrdemId?: string) {
+    return this.items.some(
+      (o) => o.orcamentoId === orcamentoId && o.id !== excluirOrdemId,
+    );
   }
 
   async create(data: OrdemServicoCriacao) {
@@ -192,22 +205,112 @@ export class FakeOrdemServicoRepository
   }
 }
 
-export const itemPeca = {
+export class FakeOrcamentoRepository
+  implements OrcamentoRepositoryRead, OrcamentoRepositoryWrite
+{
+  items: Orcamento[] = [];
+  private seq = 0;
+
+  async findById(id: string) {
+    return this.items.find((item) => item.id === id) ?? null;
+  }
+
+  async list() {
+    return [...this.items];
+  }
+
+  async create(data: OrcamentoGravacao) {
+    this.seq = Math.max(this.seq, this.items.length);
+    const criado: Orcamento = {
+      id: `64f0000000000000000000${String(++this.seq).padStart(2, "0")}`,
+      nome: data.nome,
+      telefone: data.telefone,
+      placa: data.placa,
+      valorCentavos: data.valorCentavos,
+      itens: data.itens,
+      decisao: data.decisao,
+      decisaoData: data.decisaoData,
+    };
+    this.items.push(criado);
+    return criado;
+  }
+
+  async update(id: string, data: OrcamentoGravacao) {
+    const item = this.items.find((orcamento) => orcamento.id === id);
+    if (!item) return null;
+    item.nome = data.nome;
+    item.telefone = data.telefone;
+    item.placa = data.placa;
+    item.valorCentavos = data.valorCentavos;
+    item.itens = data.itens;
+    item.decisao = data.decisao;
+    item.decisaoData = data.decisaoData;
+    return item;
+  }
+
+  async delete(id: string) {
+    const antes = this.items.length;
+    this.items = this.items.filter((item) => item.id !== id);
+    return this.items.length < antes;
+  }
+}
+
+export const ORCAMENTO_ID = "64f000000000000000000001";
+
+const ITENS_PADRAO = [{
   descricao: "Pastilha",
   tipo: ETipo.PECA,
   quantidade: 2,
-  valorUnitario: 80.25,
+  valorUnitarioCentavos: 8025,
+}];
+
+export const orcamentoDominioInput: OrcamentoInput = {
+  nome: null,
+  telefone: null,
+  placa: null,
+  decisao: EDecisao.PENDENTE,
+  valorCentavos: 16050,
+  itens: ITENS_PADRAO,
 };
 
-export function ordemInput(status: EStatus = EStatus.EM_ESPERA) {
+export function orcamentoGravacao(overrides: Partial<OrcamentoGravacao> = {}): OrcamentoGravacao {
+  return {
+    ...orcamentoDominioInput,
+    decisaoData: new Date("2024-01-01T12:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export function orcamentoAprovadoSeed(
+  id = ORCAMENTO_ID,
+  overrides: Partial<Orcamento> = {},
+): Orcamento {
+  return {
+    id,
+    ...orcamentoGravacao({ decisao: EDecisao.APROVADO }),
+    ...overrides,
+  };
+}
+
+export function orcamentoHttpBody(overrides: Record<string, unknown> = {}) {
+  return {
+    itens: [{
+      descricao: "Pastilha",
+      tipo: ETipo.PECA,
+      quantidade: 2,
+      valorUnitario: 80.25,
+    }],
+    ...overrides,
+  };
+}
+
+export function ordemInput(status: EStatus = EStatus.EM_ESPERA, orcamentoId = ORCAMENTO_ID) {
   const input = {
     veiculoId: "64a000000000000000000010",
     clienteId: "64a000000000000000000020",
-    decisao: EDecisao.PENDENTE,
+    orcamentoId,
     descricao: "Revisão",
-    orcamento: 150.5,
     status,
-    itens: [itemPeca],
   };
   if (status === EStatus.PAUSADO || status === EStatus.CANCELADO) {
     return { ...input, motivo: "Motivo informado" };
@@ -215,27 +318,21 @@ export function ordemInput(status: EStatus = EStatus.EM_ESPERA) {
   return input;
 }
 
-export function ordemUpdateInput() {
-  const { status: _status, ...resto } = ordemInput();
+export function ordemUpdateInput(orcamentoId = ORCAMENTO_ID) {
+  const { status: _status, ...resto } = ordemInput(EStatus.EM_ESPERA, orcamentoId);
   return resto;
 }
 
-export const itemPecaDominio = {
-  descricao: "Pastilha",
-  tipo: ETipo.PECA,
-  quantidade: 2,
-  valorUnitarioCentavos: 8025,
-};
-
-export function ordemDominioInput(status: EStatus = EStatus.EM_ESPERA): OrdemServicoInput {
+export function ordemDominioInput(
+  status: EStatus = EStatus.EM_ESPERA,
+  orcamentoId = ORCAMENTO_ID,
+): OrdemServicoInput {
   const input: OrdemServicoInput = {
     veiculoId: "64a000000000000000000010",
     clienteId: "64a000000000000000000020",
-    decisao: EDecisao.PENDENTE,
+    orcamentoId,
     descricao: "Revisão",
-    orcamentoCentavos: 15050,
     status,
-    itens: [itemPecaDominio],
   };
   if (status === EStatus.PAUSADO || status === EStatus.CANCELADO) {
     input.motivo = "Motivo informado";
@@ -243,7 +340,10 @@ export function ordemDominioInput(status: EStatus = EStatus.EM_ESPERA): OrdemSer
   return input;
 }
 
-export function ordemDominioUpdateInput() {
-  const { status: _status, motivo: _motivo, ...resto } = ordemDominioInput();
+export function ordemDominioUpdateInput(orcamentoId = ORCAMENTO_ID) {
+  const { status: _status, motivo: _motivo, ...resto } = ordemDominioInput(
+    EStatus.EM_ESPERA,
+    orcamentoId,
+  );
   return resto;
 }

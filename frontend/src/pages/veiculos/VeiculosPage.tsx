@@ -1,76 +1,168 @@
-import { Link, useSearchParams } from 'react-router-dom'
-import { useClientes } from '../../features/cliente/hooks/useClientes'
-import { VeiculoTable } from '../../features/veiculo/components/VeiculoTable'
-import { useVeiculos } from '../../features/veiculo/hooks/useVeiculos'
-import type { Veiculo } from '../../features/veiculo/types'
-import { Alert } from '../../shared/ui/Alert'
-import { EmptyState } from '../../shared/ui/EmptyState'
-import { Icon } from '../../shared/ui/Icon'
-import { PageHeader } from '../../shared/ui/PageHeader'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { clientesApi } from '../../shared/api/clientes.ts'
+import { getErrorMessage } from '../../shared/api/http.ts'
+import type { Veiculo } from '../../shared/api/types.ts'
+import { veiculosApi } from '../../shared/api/veiculos.ts'
+import { matchesQuery, sortAlpha } from '../../shared/lib/search.ts'
+import { useResource } from '../../shared/lib/useResource.ts'
+import {
+  Alert,
+  Button,
+  Card,
+  ConfirmDialog,
+  DataTable,
+  EmptyState,
+  IconButton,
+  LinkButton,
+  LoadingState,
+  PageHeader,
+  SearchInput,
+  useToast,
+} from '../../shared/ui'
+import type { DataColumn } from '../../shared/ui'
+import { formatPlaca } from './format'
+import { Placa } from './Placa'
+
+interface Row {
+  veiculo: Veiculo
+  dono: string
+}
 
 export function VeiculosPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const clienteId = searchParams.get('clienteId') ?? undefined
-  const { veiculos, isLoading, error, remove } = useVeiculos(clienteId)
-  const { clientes, error: erroClientes } = useClientes()
-  const erro = error ?? erroClientes
+  const navigate = useNavigate()
+  const toast = useToast()
+  const { data, error, isLoading, reload } = useResource(async (signal) => {
+    const [veiculos, clientes] = await Promise.all([veiculosApi.list({}, signal), clientesApi.list(signal)])
+    return { veiculos, clientes }
+  }, [])
+  const [query, setQuery] = useState('')
+  const [toDelete, setToDelete] = useState<Row | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  function handleFiltroChange(valor: string) {
-    setSearchParams(valor ? { clienteId: valor } : {})
+  const allRows = useMemo<Row[]>(() => {
+    if (!data) return []
+    const nomes = new Map(data.clientes.map((c) => [c.id, c.nome]))
+    return sortAlpha(data.veiculos, (v) => v.placa).map((veiculo) => ({ veiculo, dono: nomes.get(veiculo.dono) ?? '' }))
+  }, [data])
+  const rows = useMemo(
+    () =>
+      allRows.filter(({ veiculo: v, dono }) =>
+        matchesQuery(query, v.placa, formatPlaca(v.placa), v.marca, v.modelo, v.ano, dono),
+      ),
+    [allRows, query],
+  )
+
+  async function confirmDelete() {
+    if (!toDelete) return
+    setDeleting(true)
+    try {
+      await veiculosApi.remove(toDelete.veiculo.id)
+      toast.success('Veículo excluído.')
+      setToDelete(null)
+      reload()
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+      setToDelete(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
-  async function handleRemove(veiculo: Veiculo) {
-    if (!window.confirm(`Excluir o veículo ${veiculo.placa}?`)) return
-    await remove(veiculo.id)
-  }
+  const columns: DataColumn<Row>[] = [
+    { key: 'placa', header: 'Placa', cell: (r) => <Placa placa={r.veiculo.placa} /> },
+    { key: 'modelo', header: 'Marca / Modelo', cell: (r) => <span className="font-semibold">{r.veiculo.marca} {r.veiculo.modelo}</span> },
+    { key: 'ano', header: 'Ano', className: 'tabular-nums', cell: (r) => r.veiculo.ano },
+    {
+      key: 'dono',
+      header: 'Dono',
+      cell: (r) =>
+        r.dono ? (
+          <Link
+            to={`/clientes/${r.veiculo.dono}`}
+            onClick={(e) => e.stopPropagation()}
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            {r.dono}
+          </Link>
+        ) : (
+          <span className="text-text-muted">—</span>
+        ),
+    },
+    {
+      key: 'acoes',
+      header: <span className="sr-only">Ações</span>,
+      className: 'w-14 text-right',
+      cell: (r) => (
+        <IconButton
+          aria-label={`Excluir veículo ${formatPlaca(r.veiculo.placa)}`}
+          icon="trash"
+          size="sm"
+          className="text-danger"
+          onClick={(e) => {
+            e.stopPropagation()
+            setToDelete(r)
+          }}
+        />
+      ),
+    },
+  ]
+
+  const novo = <LinkButton to="/veiculos/novo" icon="plus">Novo veículo</LinkButton>
 
   return (
-    <section>
-      <PageHeader
-        title="Veículos"
-        description="Consulte os veículos atendidos e seus proprietários."
-        actions={
-          <Link to="/veiculos/novo" className="btn-primary">
-            <Icon name="plus" className="h-4 w-4" />
-            Novo veículo
-          </Link>
+    <>
+      <PageHeader title="Veículos" description="Todos os veículos cadastrados e seus donos." actions={novo} />
+
+      {isLoading && !data ? (
+        <Card><LoadingState label="Carregando veículos…" /></Card>
+      ) : error && !data ? (
+        <Alert
+          tone="danger"
+          title="Não foi possível carregar os veículos"
+          action={<Button size="sm" variant="secondary" onClick={reload}>Tentar novamente</Button>}
+        >
+          {error}
+        </Alert>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <SearchInput value={query} onChange={setQuery} label="Buscar veículos" placeholder="Placa, marca, modelo, ano ou dono" />
+          <DataTable
+            caption="Veículos"
+            columns={columns}
+            rows={rows}
+            rowKey={(r) => r.veiculo.id}
+            onRowClick={(r) => navigate(`/veiculos/${r.veiculo.id}`)}
+            empty={
+              allRows.length === 0 ? (
+                <EmptyState icon="veiculo" title="Nenhum veículo cadastrado" description="Cadastre o primeiro veículo para abrir ordens de serviço." action={novo} />
+              ) : (
+                <EmptyState icon="search" title="Nenhum veículo encontrado" description="Tente outra placa, marca, modelo, ano ou dono." />
+              )
+            }
+          />
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={toDelete !== null}
+        tone="danger"
+        title="Excluir veículo"
+        message={
+          toDelete ? (
+            <>
+              Excluir o veículo <strong>{formatPlaca(toDelete.veiculo.placa)}</strong>? Esta ação não pode ser desfeita. O sistema
+              não permite excluir veículos que já têm ordens de serviço.
+            </>
+          ) : (
+            ''
+          )
         }
+        confirmLabel="Excluir"
+        isLoading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setToDelete(null)}
       />
-
-      <div className="mb-4 max-w-xs">
-        <label className="field-label">
-          Filtrar por cliente
-          <select
-            className="input mt-1"
-            value={clienteId ?? ''}
-            onChange={(event) => handleFiltroChange(event.target.value)}
-          >
-            <option value="">Todos os clientes</option>
-            {clientes.map((cliente) => (
-              <option key={cliente.id} value={cliente.id}>
-                {cliente.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {erro && <Alert variant="error" className="mb-4">{erro}</Alert>}
-      {isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
-      {!isLoading && veiculos.length === 0 && (
-        <EmptyState
-          title="Nenhum veículo encontrado"
-          description="Cadastre um veículo para vinculá-lo a um cliente."
-          action={
-            <Link to="/veiculos/novo" className="btn-primary">
-              Cadastrar veículo
-            </Link>
-          }
-        />
-      )}
-      {!isLoading && veiculos.length > 0 && (
-        <VeiculoTable veiculos={veiculos} clientes={clientes} onRemove={handleRemove} />
-      )}
-    </section>
+    </>
   )
 }

@@ -1,11 +1,8 @@
 import { NextFunction, Request, Response, Router } from "express";
 import { ValidationError } from "../../domain/common/errors/app-error";
-import { EDecisao } from "../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
-import { ETipo } from "../../domain/ordem-servico/entity/e-tipo";
 import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-servico.service";
 import {
-  ItemOrdemRequest,
   OrdemServicoBaseRequest,
   OrdemServicoCreateRequest,
   toOrdemServicoInput,
@@ -21,48 +18,18 @@ function validaEnum<T extends string>(valor: unknown, permitidos: T[], campo: st
   return valor as T;
 }
 
-function validaInteiro(valor: unknown, campo: string): number {
-  if (typeof valor !== "number" || !Number.isInteger(valor)) {
-    throw new ValidationError(`Campo '${campo}' deve ser um inteiro`);
-  }
-  return valor;
-}
-
-function validaNumero(valor: unknown, campo: string): number {
-  if (typeof valor !== "number" || !Number.isFinite(valor)) {
-    throw new ValidationError(`Campo '${campo}' deve ser um número`);
-  }
-  return valor;
-}
-
-function validaItens(itens: unknown): ItemOrdemRequest[] {
-  if (!Array.isArray(itens)) throw new ValidationError("Campo 'itens' é obrigatório");
-  return itens.map((item, indice) => {
-    if (typeof item?.descricao !== "string" || !item.descricao.trim()) {
-      throw new ValidationError(`Campo 'itens[${indice}].descricao' é obrigatório`);
-    }
-    return {
-      descricao: item.descricao.trim(),
-      tipo: validaEnum(item.tipo, Object.values(ETipo), `itens[${indice}].tipo`),
-      quantidade: validaInteiro(item.quantidade, `itens[${indice}].quantidade`),
-      valorUnitario: validaNumero(item.valorUnitario, `itens[${indice}].valorUnitario`),
-    };
-  });
-}
-
 function validaBodyBase(body: any): OrdemServicoBaseRequest {
   validaObjectId(body?.veiculoId, "Campo 'veiculoId' é inválido");
   validaObjectId(body?.clienteId, "Campo 'clienteId' é inválido");
+  validaObjectId(body?.orcamentoId, "Campo 'orcamentoId' é inválido");
   if (typeof body?.descricao !== "string" || !body.descricao.trim()) {
     throw new ValidationError("Campo 'descricao' é obrigatório");
   }
   return {
     veiculoId: body.veiculoId,
     clienteId: body.clienteId,
-    decisao: validaEnum(body.decisao, Object.values(EDecisao), "decisao"),
+    orcamentoId: body.orcamentoId,
     descricao: body.descricao.trim(),
-    orcamento: validaNumero(body.orcamento, "orcamento"),
-    itens: validaItens(body.itens),
   };
 }
 
