@@ -6,13 +6,13 @@ import usuarioController from "./application/controllers/usuario.controller";
 
 import { createEventoRouter } from "./application/controllers/evento.controller";
 import { createClienteRouter } from "./application/controllers/cliente.controller";
+import { createOrcamentoRouter } from "./application/controllers/orcamento.controller";
 import { createOrdemServicoRouter } from "./application/controllers/ordem-servico.controller";
 import { createVeiculoRouter } from "./application/controllers/veiculo.controller";
 import { makeClienteService } from "./configuration/factory/cliente.factory";
+import { makeOrcamentoService } from "./configuration/factory/orcamento.factory";
 import { makeOrdemServicoService } from "./configuration/factory/ordem-servico.factory";
 import { makeVeiculoService } from "./configuration/factory/veiculo.factory";
-import { createOrcamentoRouter } from "./application/controllers/orcamento.controller";
-import { makeOrcamentoService } from "./configuration/factory/orcamento.factory";
 
 export function createApp(): Express {
   const app = express();
@@ -27,10 +27,10 @@ export function createApp(): Express {
   app.use("/api/usuarios", usuarioController);
   app.use("/api/clientes", createClienteRouter(makeClienteService()));
   app.use("/api/veiculos", createVeiculoRouter(makeVeiculoService()));
+  app.use("/api/orcamentos", createOrcamentoRouter(makeOrcamentoService()));
   const ordemServicoService = makeOrdemServicoService();
   app.use("/api/ordens-servico/:ordemServicoId/eventos", createEventoRouter(ordemServicoService));
   app.use("/api/ordens-servico", createOrdemServicoRouter(ordemServicoService));
-  app.use("/api/orcamentos", createOrcamentoRouter(makeOrcamentoService()));
 
   app.use(errorHandler);
 

@@ -41,7 +41,7 @@ export const TIPO_LABELS: Record<TipoItem, string> = {
   MAO_DE_OBRA: 'Mão de obra',
 }
 
-export interface ItemOrdem {
+export interface ItemOrcamento {
   descricao: string
   tipo: TipoItem
   quantidade: number
@@ -75,10 +75,8 @@ export interface OrdemServico {
   decisao: DecisaoOrdem
   decisaoData: string
   descricao: string
-  orcamento: number
   status: StatusOrdem
   historico: Evento[]
-  itens: ItemOrdem[]
 }
 
 export interface OrdemServicoInput {
@@ -86,11 +84,21 @@ export interface OrdemServicoInput {
   clienteId: string
   decisao: DecisaoOrdem
   descricao: string
-  orcamento: number
-  itens: ItemOrdem[]
 }
 
 export type OrdemServicoCreateInput = OrdemServicoInput & {
   status: StatusOrdem
   motivo?: string
+}
+
+export interface Orcamento {
+  id: string
+  ordemServicoId: string
+  valor: number
+  itens: ItemOrcamento[]
+}
+
+export interface OrcamentoInput {
+  valor: number
+  itens: ItemOrcamento[]
 }

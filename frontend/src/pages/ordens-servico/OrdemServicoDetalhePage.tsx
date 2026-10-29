@@ -3,9 +3,11 @@ import { useParams } from 'react-router-dom'
 import { useClientes } from '../../features/cliente/hooks/useClientes'
 import { EventosPanel } from '../../features/ordem-servico/components/EventosPanel'
 import { formatMoeda } from '../../features/ordem-servico/components/formatMoeda'
+import { OrcamentoPanel } from '../../features/ordem-servico/components/OrcamentoPanel'
 import { OrdemServicoForm } from '../../features/ordem-servico/components/OrdemServicoForm'
 import { StatusBadge } from '../../features/ordem-servico/components/StatusBadge'
 import { useEventos } from '../../features/ordem-servico/hooks/useEventos'
+import { useOrcamento } from '../../features/ordem-servico/hooks/useOrcamento'
 import { useOrdemServico } from '../../features/ordem-servico/hooks/useOrdemServico'
 import { DECISAO_LABELS } from '../../features/ordem-servico/types'
 import type { EventoInput, OrdemServicoInput } from '../../features/ordem-servico/types'
@@ -18,6 +20,7 @@ export function OrdemServicoDetalhePage() {
   const { id = '' } = useParams()
   const { ordem, isLoading, isSaving, error, update, reload } = useOrdemServico(id)
   const eventos = useEventos(id)
+  const orcamento = useOrcamento(id)
   const { clientes } = useClientes()
   const { veiculos } = useVeiculos()
   const [mensagem, setMensagem] = useState<string | null>(null)
@@ -65,7 +68,11 @@ export function OrdemServicoDetalhePage() {
           <span className="text-base">{DECISAO_LABELS[ordem.decisao]}</span>
         </StatCard>
         <StatCard label="Orçamento" highlight>
-          {formatMoeda(ordem.orcamento)}
+          {orcamento.isLoading
+            ? '...'
+            : orcamento.orcamento
+              ? formatMoeda(orcamento.orcamento.valor)
+              : 'Sem orçamento'}
         </StatCard>
       </div>
       {error && <Alert variant="error">{error}</Alert>}
@@ -78,6 +85,14 @@ export function OrdemServicoDetalhePage() {
         veiculos={veiculos}
         isSaving={isSaving}
         onSubmit={handleSubmit}
+      />
+      <OrcamentoPanel
+        orcamento={orcamento.orcamento}
+        isLoading={orcamento.isLoading}
+        isSaving={orcamento.isSaving}
+        error={orcamento.error}
+        onSave={orcamento.save}
+        onRemove={orcamento.remove}
       />
       <EventosPanel
         eventos={eventos.eventos}

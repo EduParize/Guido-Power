@@ -4,7 +4,6 @@ import type { Cliente } from '../../cliente/types'
 import type { Veiculo } from '../../veiculo/types'
 import { DECISAO_LABELS } from '../types'
 import type { OrdemServico } from '../types'
-import { formatMoeda } from './formatMoeda'
 import { StatusBadge } from './StatusBadge'
 
 interface OrdemServicoTableProps {
@@ -39,7 +38,6 @@ export function OrdemServicoTable({ ordens, clientes, veiculos, onRemove }: Orde
             <th className="px-4 py-3">Veículo</th>
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Decisão</th>
-            <th className="px-4 py-3 text-right">Orçamento</th>
             <th className="px-4 py-3 text-right">Ações</th>
           </tr>
         </thead>
@@ -60,9 +58,6 @@ export function OrdemServicoTable({ ordens, clientes, veiculos, onRemove }: Orde
                   <StatusBadge status={ordem.status} />
                 </td>
                 <td className="px-4 py-3 text-slate-700">{DECISAO_LABELS[ordem.decisao]}</td>
-                <td className="px-4 py-3 text-right font-medium text-slate-900 tabular-nums">
-                  {formatMoeda(ordem.orcamento)}
-                </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-1">
                     <Link

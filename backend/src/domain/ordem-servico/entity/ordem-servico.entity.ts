@@ -1,27 +1,15 @@
-import { EDecisao } from "./e-decisao";
 import { EStatus } from "./e-status";
-import { ETipo } from "./e-tipo";
 import { Evento, EventoInput } from "./evento.entity";
-
-export type ItemOrdem = {
-  descricao: string;
-  tipo: ETipo;
-  quantidade: number;
-  valorUnitarioCentavos: number;
-};
 
 export type OrdemServico = {
   id: string;
   veiculoId: string;
   clienteId: string;
-  decisao: EDecisao;
-  decisaoData: Date;
+  orcamentoId: string;
   descricao: string;
-  orcamentoCentavos: number;
   status: EStatus;
   historico: Evento[];
   historicoVersao: number;
-  itens: ItemOrdem[];
 };
 
 export type OrdemServicoCriacao = Omit<OrdemServico, "id" | "historico"> & {
@@ -30,12 +18,12 @@ export type OrdemServicoCriacao = Omit<OrdemServico, "id" | "historico"> & {
 
 export type OrdemServicoAtualizacao = Pick<
   OrdemServico,
-  "veiculoId" | "clienteId" | "decisao" | "decisaoData" | "descricao" | "orcamentoCentavos" | "itens"
+  "veiculoId" | "clienteId" | "orcamentoId" | "descricao"
 >;
 
 export type OrdemServicoInput = Omit<
   OrdemServico,
-  "id" | "decisaoData" | "historico" | "historicoVersao"
+  "id" | "historico" | "historicoVersao"
 > & {
   motivo?: string;
 };

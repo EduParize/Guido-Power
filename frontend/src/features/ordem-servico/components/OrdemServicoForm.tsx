@@ -7,13 +7,11 @@ import type { Veiculo } from '../../veiculo/types'
 import { DECISAO_LABELS, DECISOES, STATUS_COM_MOTIVO, STATUS_LABELS, STATUS_ORDEM } from '../types'
 import type {
   DecisaoOrdem,
-  ItemOrdem,
   OrdemServico,
   OrdemServicoCreateInput,
   OrdemServicoInput,
   StatusOrdem,
 } from '../types'
-import { ItensEditor } from './ItensEditor'
 
 type OrdemServicoFormProps = {
   valores?: OrdemServico
@@ -36,11 +34,9 @@ export function OrdemServicoForm({
   const [clienteId, setClienteId] = useState(valores?.clienteId ?? '')
   const [veiculoId, setVeiculoId] = useState(valores?.veiculoId ?? '')
   const [descricao, setDescricao] = useState(valores?.descricao ?? '')
-  const [orcamento, setOrcamento] = useState(valores ? String(valores.orcamento) : '')
   const [decisao, setDecisao] = useState<DecisaoOrdem>(valores?.decisao ?? 'PENDENTE')
   const [status, setStatus] = useState<StatusOrdem>('Em espera')
   const [motivo, setMotivo] = useState('')
-  const [itens, setItens] = useState<ItemOrdem[]>(valores?.itens ?? [])
 
   const veiculosDoCliente = veiculos.filter((veiculo) => veiculo.dono === clienteId)
   const motivoObrigatorio = modo === 'criar' && STATUS_COM_MOTIVO.includes(status)
@@ -51,9 +47,7 @@ export function OrdemServicoForm({
       clienteId,
       veiculoId,
       descricao,
-      orcamento: Number(orcamento),
       decisao,
-      itens,
     }
     if (modo === 'editar') {
       onSubmit(base)
@@ -122,19 +116,6 @@ export function OrdemServicoForm({
               />
             </label>
             <label className="field-label">
-              Orçamento (R$)
-              <input
-                className="input mt-1 tabular-nums"
-                type="number"
-                min={0}
-                step={0.01}
-                required
-                value={orcamento}
-                onChange={(e) => setOrcamento(e.target.value)}
-              />
-              <span className="field-hint">Valor em reais, ex.: 350,00</span>
-            </label>
-            <label className="field-label">
               Decisão
               <select
                 className="input mt-1"
@@ -179,8 +160,6 @@ export function OrdemServicoForm({
             )}
           </div>
         </fieldset>
-
-        <ItensEditor itens={itens} onChange={setItens} />
 
         <div className="form-footer">
           <button type="submit" className="btn-primary" disabled={isSaving}>

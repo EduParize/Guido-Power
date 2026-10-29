@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useClientes } from '../../features/cliente/hooks/useClientes'
-import { formatMoeda } from '../../features/ordem-servico/components/formatMoeda'
 import { StatusBadge } from '../../features/ordem-servico/components/StatusBadge'
 import { useOrdensServico } from '../../features/ordem-servico/hooks/useOrdensServico'
 import { useVeiculos } from '../../features/veiculo/hooks/useVeiculos'
@@ -122,9 +121,6 @@ export function HomePage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium text-slate-700 tabular-nums">
-                    {formatMoeda(ordem.orcamento)}
-                  </span>
                   <StatusBadge status={ordem.status} />
                 </div>
               </li>

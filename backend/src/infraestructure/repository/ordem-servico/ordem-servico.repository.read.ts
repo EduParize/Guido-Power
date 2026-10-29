@@ -20,6 +20,15 @@ export class OrdemServicoRepositoryReadMongo implements OrdemServicoRepositoryRe
     return (await OrdemServicoModel.exists({ veiculoId })) !== null;
   }
 
+  async existsByOrcamentoId(orcamentoId: string, excluirOrdemId?: string): Promise<boolean> {
+    if (!isValidObjectId(orcamentoId)) return false;
+    const filtro: Record<string, unknown> = { orcamentoId };
+    if (excluirOrdemId && isValidObjectId(excluirOrdemId)) {
+      filtro._id = { $ne: excluirOrdemId };
+    }
+    return (await OrdemServicoModel.exists(filtro)) !== null;
+  }
+
   async listEventos(ordemId: string): Promise<Evento[] | null> {
     if (!isValidObjectId(ordemId)) return null;
     const doc = await OrdemServicoModel.findById(ordemId, { historico: 1 }).lean();

@@ -1,9 +1,7 @@
 import * as os from "node:os";
 import mongoose, { Types } from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { EDecisao } from "../../domain/ordem-servico/entity/e-decisao";
 import { EStatus } from "../../domain/ordem-servico/entity/e-status";
-import { ETipo } from "../../domain/ordem-servico/entity/e-tipo";
 import {
   EResultadoEnvio,
   EStatusNotificacao,
@@ -29,10 +27,8 @@ function ordemCriacao(): OrdemServicoCriacao {
   return {
     veiculoId: new Types.ObjectId().toString(),
     clienteId: new Types.ObjectId().toString(),
-    decisao: EDecisao.PENDENTE,
-    decisaoData: new Date(),
+    orcamentoId: new Types.ObjectId().toString(),
     descricao: "Revisão",
-    orcamentoCentavos: 15050,
     status: EStatus.EM_ESPERA,
     historico: [{
       status: EStatus.EM_ESPERA,
@@ -41,12 +37,6 @@ function ordemCriacao(): OrdemServicoCriacao {
       notificacao: notificacao(EStatusNotificacao.NAO_APLICAVEL, null),
     }],
     historicoVersao: 0,
-    itens: [{
-      descricao: "Pastilha",
-      tipo: ETipo.PECA,
-      quantidade: 2,
-      valorUnitarioCentavos: 8025,
-    }],
   };
 }
 
@@ -85,16 +75,16 @@ describe("OrdemServicoRepositoryWriteMongo", () => {
     if (mongo) await mongo.stop();
   });
 
-  it("persiste centavos inteiros e converte os nomes do domínio", async () => {
-    const ordem = await repository.create(ordemCriacao());
+  it("persiste a ordem com orcamentoId", async () => {
+    const criacao = ordemCriacao();
+    const ordem = await repository.create(criacao);
     const documento = await OrdemServicoModel.findById(ordem.id).lean();
 
-    expect(ordem.orcamentoCentavos).toBe(15050);
-    expect(ordem.itens[0].valorUnitarioCentavos).toBe(8025);
-    expect(documento?.orcamento).toBe(15050);
-    expect(documento?.itens[0].valorUnitario).toBe(8025);
-    expect(Number.isInteger(documento?.orcamento)).toBe(true);
-    expect(Number.isInteger(documento?.itens[0].valorUnitario)).toBe(true);
+    expect(ordem.descricao).toBe("Revisão");
+    expect(ordem.orcamentoId).toBe(criacao.orcamentoId);
+    expect(documento?.orcamentoId.toString()).toBe(criacao.orcamentoId);
+    expect(documento).not.toHaveProperty("orcamento");
+    expect(documento).not.toHaveProperty("itens");
   });
 
   it("permite apenas uma mutação concorrente para a mesma versão", async () => {

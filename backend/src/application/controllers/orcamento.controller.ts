@@ -1,9 +1,15 @@
 import { Router } from "express";
 import { OrcamentoService } from "../../domain/orcamento/service/orcamento.service";
-import { toOrcamentoInput, toOrcamentoResponse } from "../mappers/orcamento.mapper";
-import { validaOrcamentoBody } from "../validation/orcamento.validation";
-// AJUSTE: use o validador de id que já existe no projeto (nome e caminho reais)
+import {
+  toOrcamentoCreateInput,
+  toOrcamentoInput,
+  toOrcamentoResponse,
+} from "../mappers/orcamento.mapper";
 import { validaObjectId } from "../validation/object-id.validator";
+import {
+  validaOrcamentoCreateBody,
+  validaOrcamentoUpdateBody,
+} from "../validation/orcamento.validation";
 
 export function createOrcamentoRouter(service: OrcamentoService): Router {
   const router = Router();
@@ -28,7 +34,7 @@ export function createOrcamentoRouter(service: OrcamentoService): Router {
 
   router.post("/", async (req, res, next) => {
     try {
-      const input = toOrcamentoInput(validaOrcamentoBody(req.body));
+      const input = toOrcamentoCreateInput(validaOrcamentoCreateBody(req.body));
       res.status(201).json(toOrcamentoResponse(await service.create(input)));
     } catch (e) {
       next(e);
@@ -38,7 +44,7 @@ export function createOrcamentoRouter(service: OrcamentoService): Router {
   router.put("/:id", async (req, res, next) => {
     try {
       validaObjectId(req.params.id);
-      const input = toOrcamentoInput(validaOrcamentoBody(req.body));
+      const input = toOrcamentoInput(validaOrcamentoUpdateBody(req.body));
       res.status(200).json(toOrcamentoResponse(await service.update(req.params.id, input)));
     } catch (e) {
       next(e);

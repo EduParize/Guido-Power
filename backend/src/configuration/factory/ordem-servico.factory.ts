@@ -3,6 +3,7 @@ import { OrdemServicoService } from "../../domain/ordem-servico/service/ordem-se
 import { ClienteRepositoryReadMongo } from "../../infraestructure/repository/cliente/cliente.repository.read";
 import { OrdemServicoRepositoryReadMongo } from "../../infraestructure/repository/ordem-servico/ordem-servico.repository.read";
 import { OrdemServicoRepositoryWriteMongo } from "../../infraestructure/repository/ordem-servico/ordem-servico.repository.write";
+import { OrcamentoRepositoryReadMongo } from "../../infraestructure/repository/orcamento/orcamento.repository.read";
 import { VeiculoRepositoryReadMongo } from "../../infraestructure/repository/veiculo/veiculo.repository.read";
 import { ZenviaExternalService } from "../../infraestructure/external-service/zenvia/zenvia.external-service";
 
@@ -18,5 +19,6 @@ export function makeOrdemServicoService(): OrdemServicoService {
       token: env.ZENVIA_API_TOKEN,
       from: env.ZENVIA_WHATSAPP_FROM,
     }),
+    new OrcamentoRepositoryReadMongo(),
   );
 }

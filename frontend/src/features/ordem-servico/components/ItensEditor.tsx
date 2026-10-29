@@ -1,17 +1,17 @@
 import { Icon } from '../../../shared/ui/Icon'
 import { TIPO_LABELS, TIPOS_ITEM } from '../types'
-import type { ItemOrdem, TipoItem } from '../types'
+import type { ItemOrcamento, TipoItem } from '../types'
 
-const NOVO_ITEM: ItemOrdem = { descricao: '', tipo: 'PECA', quantidade: 1, valorUnitario: 0 }
+const NOVO_ITEM: ItemOrcamento = { descricao: '', tipo: 'PECA', quantidade: 1, valorUnitario: 0 }
 const COLUNAS = 'sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_5rem_minmax(0,1fr)_5rem]'
 
 interface ItensEditorProps {
-  itens: ItemOrdem[]
-  onChange: (itens: ItemOrdem[]) => void
+  itens: ItemOrcamento[]
+  onChange: (itens: ItemOrcamento[]) => void
 }
 
 export function ItensEditor({ itens, onChange }: ItensEditorProps) {
-  function updateItem(indice: number, campos: Partial<ItemOrdem>) {
+  function updateItem(indice: number, campos: Partial<ItemOrcamento>) {
     onChange(itens.map((item, i) => (i === indice ? { ...item, ...campos } : item)))
   }
 
