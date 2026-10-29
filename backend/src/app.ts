@@ -11,6 +11,8 @@ import { createVeiculoRouter } from "./application/controllers/veiculo.controlle
 import { makeClienteService } from "./configuration/factory/cliente.factory";
 import { makeOrdemServicoService } from "./configuration/factory/ordem-servico.factory";
 import { makeVeiculoService } from "./configuration/factory/veiculo.factory";
+import { createOrcamentoRouter } from "./application/controllers/orcamento.controller";
+import { makeOrcamentoService } from "./configuration/factory/orcamento.factory";
 
 export function createApp(): Express {
   const app = express();
@@ -28,6 +30,7 @@ export function createApp(): Express {
   const ordemServicoService = makeOrdemServicoService();
   app.use("/api/ordens-servico/:ordemServicoId/eventos", createEventoRouter(ordemServicoService));
   app.use("/api/ordens-servico", createOrdemServicoRouter(ordemServicoService));
+  app.use("/api/orcamentos", createOrcamentoRouter(makeOrcamentoService()));
 
   app.use(errorHandler);
 
